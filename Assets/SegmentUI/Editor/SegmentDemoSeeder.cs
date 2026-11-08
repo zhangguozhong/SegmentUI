@@ -52,7 +52,7 @@ namespace SegmentUI.Editor
             var pageA = Page("PageA", "DISPATCH QUEUE");
             var pageB = Page("PageB", "ACTIVITY FEED");
             var pageNative = Page("PageNative", "NATIVE SCROLLRECT", true);
-            var pageNested = NestedPage(defaultPrefab, pageNative);
+            var pageNested = NestedPage(defaultPrefab, pageNative, badge);
             var canvas = new GameObject("SegmentDemo",typeof(RectTransform),typeof(Canvas),typeof(CanvasScaler),typeof(GraphicRaycaster));
             canvas.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = canvas.GetComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize; scaler.referenceResolution = new Vector2(1080,1920); scaler.matchWidthOrHeight = 0;
@@ -98,12 +98,12 @@ namespace SegmentUI.Editor
         /// <summary>先确保示例资产存在，再打开生成的演示场景。</summary>
         [MenuItem("Tools/Segment UI/Open Demo")]
         public static void OpenDemo() { Generate(); EditorSceneManager.OpenScene(ScenePath); }
-        static SegmentNestedDemoPage NestedPage(GameObject template, SegmentDemoPage nativePage)
+        static SegmentNestedDemoPage NestedPage(GameObject template, SegmentDemoPage nativePage, SegmentItemView badge)
         {
             var root = Rect("PageNested", null); root.sizeDelta = new Vector2(1032,1200);
             var page = root.gameObject.AddComponent<SegmentNestedDemoPage>();
             const float hintHeight = 112;
-            var hint = Text("NestedHelp", root, "Swipe inside to change child tabs. Up/down scrolls the list.\nAt Left/Right edge, swipe outward to change parent page.", 26);
+            var hint = Text("NestedHelp", root, "LIVE also updates child titles + badges. Left: next; up/down: scroll.\nAt First swipe right / Last swipe left to change parent.", 26);
             Top(hint.rectTransform, hintHeight); hint.rectTransform.offsetMin = new Vector2(20, hint.rectTransform.offsetMin.y); hint.rectTransform.offsetMax = new Vector2(-20, 0);
             hint.color = Cyan; page.Help = hint;
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(template);
@@ -111,7 +111,7 @@ namespace SegmentUI.Editor
             var rect = (RectTransform)instance.transform; Fill(rect); rect.offsetMax = new Vector2(0, -hintHeight-Gap);
             instance.AddComponent<RtlLayoutNode>().IgnoreSubtree = true;
             AddRtlAdapter(root.gameObject);
-            page.ChildView = instance.GetComponent<SegmentView>(); page.NativePagePrefab = nativePage;
+            page.ChildView = instance.GetComponent<SegmentView>(); page.NativePagePrefab = nativePage; page.BadgeItem = badge;
             return Save(root.gameObject, Folder + "/PageNested.prefab").GetComponent<SegmentNestedDemoPage>();
         }
         static SegmentDemoPage Page(string name,string heading,bool native = false)

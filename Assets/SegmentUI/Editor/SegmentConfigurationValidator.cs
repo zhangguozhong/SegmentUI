@@ -132,6 +132,13 @@ namespace SegmentUI.Editor
                                 if (label != null && label.preferredWidth > label.rectTransform.rect.width + .1f)
                                     errors.Add(size + ": live title should fit its content-width item: " + id);
                             }
+                            var child = sample.View.GetPage("nested").GetComponentInChildren<SegmentView>();
+                            foreach (var id in child.EnabledPageIds)
+                            {
+                                var item = child.Bar.GetItem(id);
+                                if (item.Badge == null || item.Label.preferredWidth > item.Label.rectTransform.rect.width + .1f)
+                                    errors.Add(size + ": nested live title/badge must fit: " + id);
+                            }
                             foreach (var button in root.GetComponentsInChildren<Button>(true))
                             {
                                 CheckHit(button,errors,true);

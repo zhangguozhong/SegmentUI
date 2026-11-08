@@ -321,6 +321,87 @@ namespace SegmentUI.Tests
             Assert.That(scroll.verticalNormalizedPosition,Is.EqualTo(1).Within(.001f));
             Assert.That(view.Gesture.ActivePointerId,Is.Null);
         }
+        [UnityTest] public IEnumerator NestedLiveUpdatesKeepLazyPagesAndStopWithParentSwitch()
+        {
+            var sample = demo.GetComponent<SegmentUI.Samples.SegmentDemo>();
+            sample.ToggleLiveUpdates(); yield return new WaitForSecondsRealtime(.12f);
+            Assert.That(view.GetPage("nested"), Is.Null, "LIVE must not create a hidden parent page.");
+            yield return OpenNested(); var child = ChildView; var page = child.GetPage("left");
+            var item = child.Bar.GetItem("left"); string title = item.Label.text;
+            yield return new WaitForSecondsRealtime(.16f);
+            Assert.That(item.Label.text, Is.Not.EqualTo(title)); Assert.That(item.Badge, Is.Not.Null);
+            Assert.That(child.GetPage("middle"), Is.Null); Assert.That(child.GetPage("right"), Is.Null);
+            Assert.That(child.GetPage("left"), Is.SameAs(page)); Assert.That(page.BindingVersion, Is.EqualTo(1));
+            var nested = (SegmentUI.Samples.SegmentNestedDemoPage)view.GetPage("nested");
+            while (nested.LiveUpdateCount % 10 != 0) nested.UpdateLiveItems();
+            Assert.That(item.Badge.gameObject.activeSelf, Is.False);
+            nested.UpdateLiveItems(); Assert.That(item.Badge.gameObject.activeSelf, Is.True);
+            view.Select("activity", false); title = item.Label.text;
+            yield return new WaitForSecondsRealtime(.12f);
+            Assert.That(item.Label.text, Is.Not.EqualTo(title), "Cached child titles may update without entering their pages.");
+            sample.ToggleLiveUpdates(); title = item.Label.text; string badge = item.Badge.text;
+            yield return new WaitForSecondsRealtime(.16f);
+            Assert.That(item.Label.text, Is.EqualTo(title)); Assert.That(item.Badge.text, Is.EqualTo(badge));
+            view.Select("nested", false); Assert.That(child.GetPage("left"), Is.SameAs(page));
+        }
+        [UnityTest] public IEnumerator NestedLiveUpdatesPreserveChildParentAndNativeScrollGesturesInBothDirections()
+        {
+            demo.GetComponent<SegmentUI.Samples.SegmentDemo>().ToggleLiveUpdates();
+            foreach (bool rtl in new[] { false, true })
+            for (int mode = 0; mode < 4; mode++)
+            {
+                view.Select("activity", false); view.SetDirection(rtl ? SegmentLayoutDirection.RightToLeft : SegmentLayoutDirection.LeftToRight);
+                yield return OpenNested(); var child = ChildView; string id = mode == 3 ? "right" : "left";
+                child.Select(id, false); yield return null; Canvas.ForceUpdateCanvases();
+                var page = child.GetPage(id); var scroll = page.GetComponent<ScrollRect>();
+                scroll.StopMovement(); scroll.verticalNormalizedPosition = 1;
+                var item = child.Bar.GetItem(id); var point = ChildPoint(child);
+                float sign = rtl ? 1 : -1;
+                var delta = mode == 1 ? new Vector2(0, 90) : new Vector2(sign * ChildScreenWidth(child) * (mode == 2 ? -.65f : .65f), 0);
+                var end = point + delta; Step(point, true, true); Step(end, false, true);
+                bool parentOwns = mode >= 2; var owner = parentOwns ? view : child;
+                Assert.That(owner.Phase, Is.EqualTo(mode == 1 ? SegmentPhase.DraggingVertical : SegmentPhase.DraggingHorizontal));
+                var pointer = owner.Gesture.ActivePointerId; Assert.That(pointer.HasValue, Is.True);
+                float parentPosition = view.Pager.Position, childPosition = child.Pager.Position;
+                int parentVersion = view.Pager.Version, childVersion = child.Pager.Version;
+                var listPosition = scroll.content.anchoredPosition; string title = item.Label.text;
+                yield return new WaitForSecondsRealtime(.16f);
+                Assert.That(item.Label.text, Is.Not.EqualTo(title)); Assert.That(item.Badge, Is.Not.Null);
+                Assert.That(owner.Gesture.ActivePointerId, Is.EqualTo(pointer));
+                Assert.That(view.Pager.Position, Is.EqualTo(parentPosition)); Assert.That(child.Pager.Position, Is.EqualTo(childPosition));
+                Assert.That(view.Pager.Version, Is.EqualTo(parentVersion)); Assert.That(child.Pager.Version, Is.EqualTo(childVersion));
+                Assert.That(scroll.content.anchoredPosition.y, Is.EqualTo(listPosition.y).Within(.1f));
+                Assert.That(child.GetPage(id), Is.SameAs(page)); Assert.That(child.Bar.GetItem(id), Is.SameAs(item));
+                Assert.That(item.RightToLeft, Is.EqualTo(rtl));
+                Step(end, false, false, true); yield return new WaitForSecondsRealtime(.35f);
+                Assert.That(view.Gesture.HasActivePointer, Is.False);
+                if (mode == 0) Assert.That(child.CurrentPageId, Is.EqualTo("middle"));
+                if (mode == 2) Assert.That(view.CurrentPageId, Is.EqualTo("activity"));
+                if (mode == 3) Assert.That(view.CurrentPageId, Is.EqualTo("native"));
+            }
+        }
+        [UnityTest] public IEnumerator NestedLiveUpdatesPreserveProgrammaticTransitionsInLtrAndRtl()
+        {
+            var sample = demo.GetComponent<SegmentUI.Samples.SegmentDemo>(); sample.ToggleLiveUpdates();
+            foreach (bool rtl in new[] { false, true })
+            {
+                view.Select("activity", false); view.SetDirection(rtl ? SegmentLayoutDirection.RightToLeft : SegmentLayoutDirection.LeftToRight);
+                yield return OpenNested(); var child = ChildView; child.Select("left", false);
+                child.Select("middle", true); var target = child.GetPage("middle"); var item = child.Bar.GetItem("middle");
+                int version = child.Pager.Version; string title = item.Label.text;
+                yield return new WaitForSecondsRealtime(.12f);
+                Assert.That(item.Label.text, Is.Not.EqualTo(title)); Assert.That(child.TargetPageId, Is.EqualTo("middle"));
+                Assert.That(child.Pager.Version, Is.EqualTo(version));
+                yield return new WaitForSecondsRealtime(.25f);
+                Assert.That(child.CurrentPageId, Is.EqualTo("middle")); Assert.That(child.GetPage("middle"), Is.SameAs(target));
+                title = item.Label.text; view.Select("native", true); version = view.Pager.Version;
+                yield return new WaitForSecondsRealtime(.12f);
+                Assert.That(item.Label.text, Is.Not.EqualTo(title)); Assert.That(view.TargetPageId, Is.EqualTo("native"));
+                Assert.That(view.Pager.Version, Is.EqualTo(version));
+                yield return new WaitForSecondsRealtime(.25f); Assert.That(view.CurrentPageId, Is.EqualTo("native"));
+                view.Select("nested", false); Assert.That(child.CurrentPageId, Is.EqualTo("middle"));
+            }
+        }
         IEnumerator OpenNested()
         {
             Assert.That(view.Select("nested",false),Is.EqualTo(SegmentSelectionResult.Accepted));

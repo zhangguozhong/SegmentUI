@@ -6,7 +6,7 @@ namespace SegmentUI.Samples
     /// <summary>示例入口：组织页面、按钮、方向与压力演示，不属于核心业务 API。</summary>
     public sealed class SegmentDemo : MonoBehaviour
     {
-        public const int CurrentSchema = 10;
+        public const int CurrentSchema = 11;
         public int Schema = CurrentSchema;
         public SegmentView View;
         public SegmentDemoPage PageA, PageB, PageNative;
@@ -70,7 +70,7 @@ namespace SegmentUI.Samples
             View.SetIndicators(alternate ? new[] { Background, Outline } : new[] { Underline });
             Style.GetComponentInChildren<Text>().text = alternate ? "STYLE: PILL" : "STYLE: LINE";
         }
-        /// <summary>开启后每 0.1 秒原地更新 Activity；关闭只停计时器，不恢复旧数据或取消交互。</summary>
+        /// <summary>开启后每 0.1 秒原地更新 Activity 及已创建的 Nested 子标题；关闭只停计时器，不恢复旧数据或取消交互。</summary>
         public void ToggleLiveUpdates()
         {
             LiveUpdatesEnabled = !LiveUpdatesEnabled;
@@ -85,6 +85,8 @@ namespace SegmentUI.Samples
             View.UpdateItem("activity", new SegmentItemData {
                 Title = "Activity " + (LiveUpdateCount % 100), Icon = ItemIcon, BadgeCount = LiveUpdateCount % 10
             });
+            // 只查询已创建的父页；开启 LIVE 不能提前创建 Nested 或内部未访问的子页。
+            if (View.GetPage("nested") is SegmentNestedDemoPage nested) nested.UpdateLiveItems();
             nextLiveUpdate = Time.unscaledTime + .1f;
         }
         void Update()
@@ -104,7 +106,7 @@ namespace SegmentUI.Samples
             foreach (var page in View.GetComponentsInChildren<SegmentDemoPage>(true)) resets += page.ResetCount;
             Diagnostics.text = "CURRENT " + (View.CurrentPageId ?? "--") + "   TARGET " + (View.TargetPageId ?? "--") + "\n" + View.Phase + " / RESETS " + resets + " / STRESS " + stressRemaining + " / UPDATES " + LiveUpdateCount;
             if (View.CurrentPageId == "nested" && View.GetPage("nested") is SegmentNestedDemoPage nested)
-                Diagnostics.text += "\nCHILD " + nested.ChildView.CurrentPageId + "  /  " + nested.ChildView.Phase;
+                Diagnostics.text += "\nCHILD " + nested.ChildView.CurrentPageId + "  /  " + nested.ChildView.Phase + " / UPDATES " + nested.LiveUpdateCount;
         }
     }
 }

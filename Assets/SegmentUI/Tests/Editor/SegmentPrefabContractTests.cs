@@ -113,6 +113,9 @@ namespace SegmentUI.Tests.Editor
             Assert.That(live.GetComponentInChildren<Text>().text, Is.EqualTo("LIVE: OFF"));
             var demo = new SerializedObject(prefab.GetComponents<MonoBehaviour>().Single(component => component.GetType().Name == "SegmentDemo"));
             Assert.That(demo.FindProperty("LiveUpdateButton").objectReferenceValue, Is.EqualTo(live.GetComponent<Button>()));
+            var nested = AssetDatabase.LoadAssetAtPath<GameObject>(Folder + "/PageNested.prefab");
+            var nestedData = new SerializedObject(nested.GetComponents<MonoBehaviour>().Single(component => component.GetType().Name == "SegmentNestedDemoPage"));
+            Assert.That(nestedData.FindProperty("BadgeItem").objectReferenceValue, Is.Not.Null);
             foreach (var button in prefab.GetComponentsInChildren<Button>(true))
             {
                 var layout = button.GetComponent<LayoutElement>();

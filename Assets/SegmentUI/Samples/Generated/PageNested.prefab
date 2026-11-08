@@ -78,10 +78,10 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 'Swipe inside to change child tabs. Up/down scrolls the list.
+  m_Text: 'LIVE also updates child titles + badges. Left: next; up/down: scroll.
 
-    At Left/Right
-    edge, swipe outward to change parent page.'
+    At
+    First swipe right / Last swipe left to change parent.'
 --- !u!1 &8265460735578564856
 GameObject:
   m_ObjectHideFlags: 0
@@ -137,6 +137,7 @@ MonoBehaviour:
   ChildView: {fileID: 1493256684276585027}
   NativePagePrefab: {fileID: 167786925501143708, guid: 9bc24f9ca95d44415acfffca331d0fe3, type: 3}
   Help: {fileID: 7838318598245495146}
+  BadgeItem: {fileID: 4486296276945332104, guid: 0fbebe3e86bec4eddad072f00970e170, type: 3}
 --- !u!114 &2638892101211780394
 MonoBehaviour:
   m_ObjectHideFlags: 0
