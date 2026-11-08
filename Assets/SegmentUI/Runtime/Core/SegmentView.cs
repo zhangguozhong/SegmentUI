@@ -121,20 +121,28 @@ namespace SegmentUI
             if (LastError != null) Notify(() => SelectionFailed?.Invoke(initial ?? candidate, LastError));
         }
         /// <summary>
-        /// Updates Title/Icon/BadgeCount in place without interrupting interaction or rebinding pages.
-        /// IsEnabled is preserved; use SetPages for changes to the selectable page sequence.
-        /// Returns false for an unknown ID or a disposing view. Reentrant updates are queued.
+        /// 原地更新标题、图标和角标，不重建页面、不重新绑定业务数据，也不打断拖拽或切页动画。
+        /// 保留当前 IsEnabled；改变可选页面序列时应调用 SetPages。在 Unity 主线程调用。
         /// </summary>
+        /// <param name="pageId">已通过 SetPages 注册的稳定页面 ID。</param>
+        /// <param name="itemData">复制并替换 Title、Icon、BadgeCount；未填写的字段也会覆盖旧值。</param>
+        /// <returns>
+        /// 接受更新返回 true；ID 不存在、为 null 或组件正在销毁时返回 false。
+        /// 回调内的更新会排队；若执行前目标页已被移除，则跳过，true 不代表已立即刷新。
+        /// </returns>
+        /// <exception cref="ArgumentNullException">itemData 为 null。</exception>
         public bool UpdateItem(string pageId, SegmentItemData itemData)
         {
             if (itemData == null) throw new ArgumentNullException(nameof(itemData));
             if (disposing || pageId == null || !pages.Exists(page => page.Id == pageId)) return false;
+            // 请求时复制，避免排队期间调用方继续修改对象而改变本次更新内容。
             var snapshot = itemData.Copy();
             Schedule(() =>
             {
-                // A preceding queued SetPages may have removed this ID.
+                // 前面的排队操作可能已通过 SetPages 移除此 ID，执行时重新查找。
                 var page = pages.Find(candidate => candidate.Id == pageId);
                 if (disposing || page == null) return;
+                // 启用状态影响分页索引与手势目标，视觉刷新不能顺带修改它。
                 snapshot.IsEnabled = page.Item.IsEnabled;
                 page.Item = snapshot;
                 if (bar != null) bar.UpdateItem(pageId, snapshot);

@@ -137,6 +137,7 @@ namespace SegmentUI
             lastCentered = null; hasLayout = false; LayoutItems(); Interactable = interactable;
             if (!indicatorsInitialized) SetIndicators(DefaultIndicators);
         }
+        /// <summary>复用已有标题项，只刷新内容和布局，保留分页进度及标题栏滚动状态。</summary>
         internal void UpdateItem(string id, SegmentItemData data)
         {
             var item = GetItem(id);
@@ -144,12 +145,15 @@ namespace SegmentUI
             updatingItem = true;
             try
             {
+                // Bind 会重置选中视觉；保存当前动画权重与已提交状态，更新后立即恢复。
                 float weight = item.SelectedWeight; bool committed = item.IsCommitted;
                 item.Bind(data.Copy());
+                // 重新应用方向，让 RTL 适配器处理 Bind 后新增或更新的内部内容。
                 item.ApplyDirection(RightToLeft);
                 item.ApplyVisualState(weight, committed);
                 LayoutItems();
-                // Relayout may invalidate centering, but a data refresh must not stop title scrolling.
+                // 重布局会使居中记录失效；本次只刷新指示器，不触发居中或清空滚动速度。
+                // 记录当前目标，避免下一帧 Render 再次自动居中。
                 lastCentered = TargetPageId ?? lastCurrent;
                 RefreshVisuals();
             }
@@ -278,6 +282,7 @@ namespace SegmentUI
                 string centerId = TargetPageId ?? currentId;
                 if (centerId != null && lastCentered != centerId)
                 {
+                    // 数据更新期间禁止居中；正常选择页面仍按 AutoCenter/Reveal 规则执行。
                     if (!updatingItem)
                     { if (AutoCenter) CenterItem(centerId); else RevealItem(centerId); }
                     lastCentered = centerId;

@@ -33,10 +33,11 @@ public sealed class MyScreen : MonoBehaviour
     [SerializeField] SegmentView segments;
     [SerializeField] SegmentPage allPagePrefab, favoritesPagePrefab;
     [SerializeField] SegmentItemView badgeItemPrefab;
+    SegmentPageDescriptor[] pages;
 
     void Start()
     {
-        segments.SetPages(new[]
+        pages = new[]
         {
             new SegmentPageDescriptor
             {
@@ -51,14 +52,15 @@ public sealed class MyScreen : MonoBehaviour
                 ItemTemplate = badgeItemPrefab,
                 Source = PageSource.FromPrefab(favoritesPagePrefab)
             }
-        }, initialPageId: "all");
+        };
+        segments.SetPages(pages, initialPageId: "all");
     }
 }
 ```
 
 也可在 SegmentView Inspector 的 Initial Pages 中配置 Prefab/ExistingInstance 来源。Id 必须稳定、非空、唯一；标题和页面通过同一描述项关联，不依赖两个数组的索引。
 
-`SetPages` 会复制结构数据。纯标题/角标变化不重绑页面；业务依赖变化时增加 `PageRevision`，然后重新提交描述。修改 Prefab、Factory 实例或来源版本会释放旧页面实例。
+`SetPages` 会复制传入数据。运行时只更新标题、图标或角标时使用下方的 `UpdateItem`，避免重复提交页面列表打断交互。业务依赖变化时增加 `PageRevision` 并调用 `SetPages`；修改 Prefab、Factory 实例或来源版本会释放旧页面实例。
 
 `Item.IsEnabled=false` 保留禁用标题，但该页不进入可滑动序列。选择禁用页返回 Unavailable；选择未知 Id 返回 Invalid。
 
@@ -79,20 +81,60 @@ descriptor.PageRevision++;
 
 ## 运行时更新标题、图标和角标
 
+### 只修改标题或角标
+
+沿用上例保存的 `pages`，修改业务数据后提交对应 Item：
+
 ```csharp
-bool accepted = segments.UpdateItem("activity", new SegmentItemData
-{
-    Title = "最新动态",
-    Icon = activityIcon, // Sprite；传 null 清除图标
-    BadgeCount = 5      // 小于等于 0 时隐藏角标
-});
+// 修改收藏页角标，同时保留原来的标题和图标。
+var page = pages[1];
+page.Item.BadgeCount = 5;
+bool accepted = segments.UpdateItem(page.Id, page.Item);
+
+// 修改标题。
+page.Item.Title = "我的收藏";
+segments.UpdateItem(page.Id, page.Item);
+
+// 隐藏角标。
+page.Item.BadgeCount = 0;
+segments.UpdateItem(page.Id, page.Item);
 ```
 
-`UpdateItem` 替换该项的 Title、Icon、BadgeCount，并保留原来的 IsEnabled。调用后无需再调用 SetPages；它不会重建标题项或 Page，也不会重新绑定业务页面、打断当前拖拽或切页动画。标题宽度和指示器会按新内容刷新，标题栏不会因此自动居中或停止惯性。
+同步维护 `pages` 中的数据，可以避免之后调用 `SetPages(pages)` 时旧值覆盖当前显示。仅修改外部数据不会自动刷新，必须调用 `UpdateItem`。
 
-传入数据会被复制，之后修改该对象不会自动刷新。Id 不存在时返回 false；itemData 为 null 时抛出 ArgumentNullException。回调内调用会排队，返回 true 表示已接受；如果前面的排队操作已删除该页，更新会跳过。
+### 替换整份标题数据
 
-新增、删除、排序、启用/禁用页面、替换模板或页面来源仍使用 SetPages。如果业务还保留页面描述列表，请同步修改列表中的 Item，避免后续 SetPages 用旧数据覆盖显示。
+```csharp
+var page = pages[1];
+page.Item = new SegmentItemData
+{
+    Title = "我的收藏",
+    Icon = favoritesIcon, // 业务持有的 Sprite；传 null 清除图标
+    BadgeCount = 5
+};
+segments.UpdateItem(page.Id, page.Item);
+```
+
+`UpdateItem` 会替换 Title、Icon、BadgeCount，**不是只更新填写的字段**。例如只传 `new SegmentItemData { BadgeCount = 5 }` 会同时清除标题和图标。仅改一个字段时，使用前面的保留数据写法。
+
+### 调用规则
+
+- 在 Unity 主线程调用；调用后无需再调用 `SetPages`。
+- 不重建标题项或 Page，不重新绑定业务页面，不打断拖拽、标题栏惯性或切页动画。
+- 标题宽度和指示器随内容刷新；不主动居中，内容缩短时只将滚动位置限制在新的有效范围内。
+- 保留当前 `IsEnabled`，传入值不用于改变可选页面序列。
+- 输入会被复制，调用后再修改该对象不会自动刷新。
+- 返回 true 表示接受更新；未知/null PageId 或正在销毁的组件返回 false。itemData 为 null 时抛出 `ArgumentNullException`。
+- 在回调内调用会排队；若前面的排队操作已删除该页，则跳过更新。
+
+### 什么时候使用 SetPages
+
+| 修改内容 | 调用方法 |
+| --- | --- |
+| 标题、图标、角标 | `UpdateItem(pageId, itemData)` |
+| 新增、删除、排序、启用或禁用页面 | `SetPages(pages)` |
+| 修改标题模板、页面来源 | `SetPages(pages)` |
+| 更新业务绑定数据 | 增加对应 `PageRevision` 后调用 `SetPages(pages)` |
 
 ## 选择页面与切换方向
 
