@@ -10,6 +10,14 @@ namespace SegmentUI.Tests.Editor
 {
     public class SegmentPrefabContractTests
     {
+        // 包安装后源文件位于 Packages；生成的演示资产仍位于可编辑的 Assets。
+        static string ReadAssemblyDefinition(string assemblyName)
+        {
+            var path = AssetDatabase.FindAssets("t:AssemblyDefinitionAsset")
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Single(p => Path.GetFileName(p) == assemblyName + ".asmdef");
+            return AssetDatabase.LoadAssetAtPath<UnityEditorInternal.AssemblyDefinitionAsset>(path).text;
+        }
         const string Folder = "Assets/SegmentUI/Samples/Generated";
         [Test] public void EditorCaptureCanExplicitlySynchronizeBridgeWithoutPlayModeCallbacks()
         {
@@ -46,8 +54,8 @@ namespace SegmentUI.Tests.Editor
                     Assert.That(new SerializedObject(boundary).FindProperty("IgnoreSubtree").boolValue, Is.True);
                 }
             }
-            Assert.That(File.ReadAllText("Assets/RTLLayout/Runtime/RTLLayout.asmdef"), Does.Not.Contain("SegmentUI"));
-            Assert.That(File.ReadAllText("Assets/SegmentUI/Runtime/SegmentUI.asmdef"), Does.Not.Contain("RTLLayout"));
+            Assert.That(ReadAssemblyDefinition("RTLLayout"), Does.Not.Contain("SegmentUI"));
+            Assert.That(ReadAssemblyDefinition("SegmentUI"), Does.Not.Contain("RTLLayout"));
         }
         [Test] public void ReimportDemoReferencesPreservesFilesAndResolvesEveryPageSource()
         {

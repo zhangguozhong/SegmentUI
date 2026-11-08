@@ -2,17 +2,35 @@
 
 ## 安装
 
-使用 Unity 2022.3 和 UGUI 1.0。
+支持 Unity 2022.3 和 UGUI 1.0。
 
-1. 将本仓库 `Assets/SegmentUI` 及 `.meta` 文件复制到工程的 `Assets` 目录。
-2. 使用默认 Prefab、示例或 Editor 工具时，同时从 [RTLLayout](https://github.com/zhangguozhong/RTLLayout) 导入 `Assets/RTLLayout` 及 `.meta` 文件。
-3. 如果保留 Tests 目录，安装 Unity Test Framework；不需要测试时可移除两个组件的 Tests 目录。
+### GitHub + UPM
 
-请使用目录复制方式安装。仅需分页核心时，可只导入 `Runtime` 并自行制作容器和标题 Prefab。
+在 **Window → Package Manager → + → Add package from git URL** 中添加以下地址（电脑需安装 Git）：
+
+先安装 RTLLayout，再安装 SegmentUI：
+
+```text
+https://github.com/zhangguozhong/RTLLayout.git?path=Assets/RTLLayout#v0.1.0
+```
+
+```text
+https://github.com/zhangguozhong/SegmentUI.git?path=Assets/SegmentUI#v0.1.0
+```
+
+固定版本使用 `#v0.1.0`；跟随主分支时改为 `#main`，之后通过 Package Manager 更新。不要同时保留 Assets 中的同一组件源码，以免程序集重复。
+
+完整包包含 RTLLayout 桥接、默认 Prefab 和示例工具，需要同时保留 RTLLayout 的 Git 依赖。
+
+### 目录复制安装
+
+也可将仓库的 `Assets/SegmentUI` 目录（含 `.meta`）复制到工程 `Assets` 下。同时复制 RTLLayout 仓库的 `Assets/RTLLayout`。仅需分页核心时，可只导入 `Runtime` 并自行制作 Prefab。保留 Tests 目录时需安装 Unity Test Framework。
 
 ## 打开示例
 
-选择 **Tools → Segment UI → Open Demo**，将 Game View 设为竖屏（如 720×1280），进入 Play。
+选择 **Tools → Segment UI → Open Demo**，首次使用会生成可编辑的 `Assets/SegmentUI/Prefabs` 和 `Assets/SegmentUI/Samples/Generated`，不会修改 Packages 中的资产。
+
+将 Game View 设为竖屏（如 720×1280），进入 Play。
 
 - 点击标题或横向拖动切换页面，纵向拖动滚动当前页。
 - **Native** 页使用原生 ScrollRect；首行按钮显示点击次数。
@@ -240,3 +258,13 @@ segments.SetIndicators(System.Array.Empty<SegmentIndicator>()); // 明确关闭
 ## 修复示例页面引用
 
 若打开示例时报 `Page source must be exactly one valid asset, factory or instance`，先退出 Play，选择 **Tools → Segment UI → Reimport Demo References**，再检查 Demo 的页面 Prefab 引用是否完整。
+
+## 运行包内测试
+
+通过 Package Manager 安装 **Test Framework**。UPM 安装时，在工程 `Packages/manifest.json` 顶层添加 `testables`（与 `dependencies` 同级，保留其他配置）：
+
+```json
+"testables": ["com.zhangguozhong.rtllayout", "com.zhangguozhong.segmentui"]
+```
+
+先执行 **Tools → Segment UI → Generate Demo**，再打开 **Window → General → Test Runner**，运行 EditMode 与 PlayMode 测试。
