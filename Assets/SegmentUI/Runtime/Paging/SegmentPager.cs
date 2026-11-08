@@ -5,6 +5,7 @@ using UnityEngine.UI;
 
 namespace SegmentUI
 {
+    /// <summary>连续逻辑页坐标与吸附动画；容器宽度由布局组件管理，分页器只写横向位移。</summary>
     [DisallowMultipleComponent]
     public sealed class SegmentPager : MonoBehaviour
     {
@@ -15,30 +16,39 @@ namespace SegmentUI
         HorizontalLayoutGroup layout;
         ContentSizeFitter fitter;
         public bool RightToLeft { get; private set; }
+        /// <summary>将屏幕横向拖动转成逻辑翻页方向；RTL 仅改变物理映射。</summary>
         public float DragSign => RightToLeft ? 1 : -1;
         float start, target, elapsed;
         Vector2 lastSize;
+        /// <summary>连续页位置改变时触发，可能在两个页面索引之间。</summary>
         public event Action<float> PositionChanged;
+        /// <summary>动画完成或立即定位后通知最终索引。</summary>
         public event Action<int> Settled;
+        /// <summary>视口尺寸改变后通知宿主重新处理布局与交互。</summary>
         public event Action LayoutChanged;
         public RectTransform Viewport => viewport;
         public RectTransform Content => content;
         public int PageCount => count;
+        /// <summary>停止/替换动画时递增；旧动画回调不得提交新状态。</summary>
         public int Version => version;
         public bool HasLayout => viewport != null && viewport.rect.width > 0 && viewport.rect.height > 0;
+        /// <summary>以页面为单位的连续逻辑坐标，0 表示第一张启用页。</summary>
         public float Position { get; private set; }
         public bool IsSettling { get; private set; }
+        /// <summary>设置视口和 PageContent，建立布局组件与初始几何。</summary>
         public void Configure(RectTransform viewport, RectTransform content)
         {
             this.viewport = viewport; this.content = content;
             lastSize = viewport.rect.size;
             ApplyGeometry();
         }
+        /// <summary>更新启用页数量并限制当前位置；会停止旧动画。</summary>
         public void SetPageCount(int count)
         {
             this.count = Mathf.Max(0, count);
             Stop(); SetPosition(Position); ApplyGeometry();
         }
+        /// <summary>直接设置有限逻辑位置并限制在合法页范围，不主动提交业务选择。</summary>
         public void SetPosition(float position)
         {
             if (float.IsNaN(position) || float.IsInfinity(position)) throw new ArgumentOutOfRangeException(nameof(position));
@@ -47,6 +57,7 @@ namespace SegmentUI
                 content.anchoredPosition = new Vector2(-PhysicalPosition * viewport.rect.width, 0);
             PositionChanged?.Invoke(Position);
         }
+        /// <summary>从当前视觉位置吸附到目标索引；animated=false 立即定位并触发 Settled。</summary>
         public void MoveTo(int index, bool animated)
         {
             if (index < 0 || index >= count) throw new ArgumentOutOfRangeException(nameof(index));
@@ -55,6 +66,7 @@ namespace SegmentUI
             { SetPosition(index); Settled?.Invoke(index); }
             else IsSettling = true;
         }
+        /// <summary>按不受 timeScale 影响的时间推进动画；位置回调导致版本变化时放弃旧提交。</summary>
         public void Tick(float unscaledDeltaTime)
         {
             if (!IsSettling || !HasLayout) return;
@@ -66,7 +78,9 @@ namespace SegmentUI
             IsSettling = false;
             Settled?.Invoke(Mathf.RoundToInt(target));
         }
+        /// <summary>停止当前吸附并使旧版本失效，不改变当前连续位置。</summary>
         public void Stop() { version++; IsSettling = false; }
+        /// <summary>视口尺寸真正改变时才重布局，并通知宿主取消不再适用的手势。</summary>
         public void RefreshLayout()
         {
             if (viewport == null) return;
@@ -76,11 +90,13 @@ namespace SegmentUI
             Stop(); ApplyGeometry(); LayoutChanged?.Invoke();
         }
         float PhysicalPosition => RightToLeft ? Mathf.Max(0, count - 1) - Position : Position;
+        /// <summary>更新物理排列方向并停止旧动画，不改变逻辑索引。</summary>
         public void SetRightToLeft(bool value)
         {
             if (RightToLeft == value) return;
             RightToLeft = value; Stop(); ApplyGeometry();
         }
+        /// <summary>PageContent 使用 HorizontalLayoutGroup 与 ContentSizeFitter，避免手工宽度与布局驱动冲突。</summary>
         public void EnsureLayoutComponents()
         {
             if (content == null) return;
@@ -102,8 +118,8 @@ namespace SegmentUI
         {
             slots.Clear(); foreach (var slot in ordered) slots.Add(slot);
             if (content == null) return;
-            // PageContent is a managed layout region. Disabled and released borrowed slots
-            // remain in the hierarchy but must not contribute to its preferred width.
+            // PageContent 是受管布局区域；禁用页和已释放的借用槽位
+            // 即使仍在层级内，也不能参与内容首选宽度计算。
             foreach (Transform child in content)
             {
                 if (!(child is RectTransform rect)) continue;
@@ -113,18 +129,20 @@ namespace SegmentUI
             }
             ApplyGeometry();
         }
+        /// <summary>更新槽位尺寸并重建布局，内容宽度由 ContentSizeFitter 独占。</summary>
         public void ApplyGeometry()
         {
             if (viewport == null || content == null) return;
             EnsureLayoutComponents();
             content.anchorMin = Vector2.zero; content.anchorMax = new Vector2(0, 1);
             content.pivot = new Vector2(0, 1);
-            // Vertical size follows the viewport. Horizontal size belongs exclusively to CSF.
+            // 纵向尺寸跟随视口，横向尺寸仅由 ContentSizeFitter 驱动。
             content.sizeDelta = new Vector2(content.sizeDelta.x, 0);
             for (int i = 0; i < slots.Count; i++) if (slots[i] != null) LayoutSlot(slots[i], i);
             LayoutRebuilder.ForceRebuildLayoutImmediate(content);
             content.anchoredPosition = new Vector2(-PhysicalPosition * viewport.rect.width, 0);
         }
+        /// <summary>槽位通过 LayoutElement 提供视口宽高；顺序由逻辑索引与布局组方向共同确定。</summary>
         public void LayoutSlot(RectTransform slot, int index)
         {
             slot.pivot = new Vector2(0, 1);

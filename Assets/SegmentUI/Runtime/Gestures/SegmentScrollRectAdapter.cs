@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 namespace SegmentUI
 {
-    /// <summary>Preserves the original ScrollRect and routes its drag through a separate event target.</summary>
+    /// <summary>保留原生 ScrollRect，通过独立事件代理将拖拽接入统一仲裁。</summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(ScrollRect))]
     public sealed class SegmentScrollRectAdapter : MonoBehaviour, IInitializePotentialDragHandler,
@@ -13,6 +13,7 @@ namespace SegmentUI
     {
         ScrollRect target;
         SegmentScrollDragProxy proxy;
+        /// <summary>适配的原生 ScrollRect，保留原组件引用、参数及 UnityEvent。</summary>
         public ScrollRect Target => target != null ? target : (target = GetComponent<ScrollRect>());
         public bool IsTitleBar => false;
         public event Action<PointerEventData> OwnedBegin, OwnedDrag, OwnedEnd, OwnedCancel;
@@ -22,6 +23,7 @@ namespace SegmentUI
         { if (Available && Scope != null) Scope.Press(data, this); }
         public void OnPointerUp(PointerEventData data)
         { if (Scope != null) Scope.Release(data); }
+        /// <summary>将 UGUI 的拖拽目标改为代理，避免原生 ScrollRect 绕过方向仲裁直接起拖。</summary>
         public void OnInitializePotentialDrag(PointerEventData data)
         {
             if (!Available || Scope == null) return;
@@ -32,8 +34,8 @@ namespace SegmentUI
                 node.transform.SetParent(transform, false);
                 proxy = node.AddComponent<SegmentScrollDragProxy>(); proxy.Owner = this;
             }
-            // Input module has selected the native ScrollRect but has not started dragging yet.
-            // Always redirect, including rejected pointers, so native OnBeginDrag cannot bypass arbitration.
+            // 输入模块已选中原生 ScrollRect，但尚未开始分发拖拽。
+            // 即使指针被拒绝也重定向，防止原生 OnBeginDrag 绕过仲裁。
             data.pointerDrag = proxy.gameObject;
             if (Scope.Press(data, this)) Target.StopMovement();
         }
@@ -45,6 +47,7 @@ namespace SegmentUI
             if (Available) return true;
             CancelIfOwner(); return false;
         }
+        /// <summary>仅授权后调用原生 BeginDrag，避免父分页与子列表同时响应。</summary>
         public void BeginOwned(PointerEventData data)
         {
             if (!Available) return;
@@ -55,6 +58,7 @@ namespace SegmentUI
         { if (Available) { Target.OnDrag(data); OwnedDrag?.Invoke(data); } }
         public void EndOwned(PointerEventData data)
         { if (Target != null) Target.OnEndDrag(data); OwnedEnd?.Invoke(data); }
+        /// <summary>取消时结束原生拖拽并清空速度；不模拟普通松手惯性。</summary>
         public void CancelOwned(PointerEventData data)
         {
             if (Target != null) { if (data != null) Target.OnEndDrag(data); Target.StopMovement(); }
@@ -72,7 +76,8 @@ namespace SegmentUI
         {
             if (proxy != null) SegmentPageHost.Destroy(proxy.gameObject);
         }
-        /// <summary>Idempotently registers native vertical ScrollRects and ordinary buttons in new page content.</summary>
+        /// <summary>为新增页面内容幂等安装原生纵向列表和普通按钮的输入适配。</summary>
+        // 幂等扫描新增内容，只适配纯纵向原生列表，并为普通按钮安装按下/抬起桥。
         public static void Install(Transform root)
         {
             if (root == null) throw new ArgumentNullException(nameof(root));

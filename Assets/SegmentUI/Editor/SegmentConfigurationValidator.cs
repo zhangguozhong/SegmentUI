@@ -10,6 +10,7 @@ using UnityEngine.UI;
 
 namespace SegmentUI.Editor
 {
+    /// <summary>编辑器资产契约检查：验证 Prefab 引用、布局与示例可用区域。</summary>
     public static class SegmentConfigurationValidator
     {
         [MenuItem("Tools/Segment UI/Validate")]
@@ -19,6 +20,7 @@ namespace SegmentUI.Editor
             if (errors.Count != 0) throw new InvalidOperationException("Segment UI configuration invalid:\n" + string.Join("\n", errors));
             Debug.Log("Segment UI configuration valid: default references, controlled scrolls, hit sizes and single sample safe area. Rendered and device validation remain separate.");
         }
+        /// <summary>返回发现的问题列表供菜单或测试断言使用，不作为运行时修复入口。</summary>
         public static List<string> ValidateAssets()
         {
             var errors = new List<string>();
@@ -83,8 +85,8 @@ namespace SegmentUI.Editor
             }
             return errors;
         }
-        // Asset RectTransforms controlled by a LayoutGroup have no reliable resolved geometry.
-        // Measure isolated instances with explicit design-space dimensions, never mutate prefab assets.
+        // 受 LayoutGroup 驱动的资产 RectTransform 尚未解析出可靠几何。
+        // 使用明确设计尺寸的隔离实例测量，不修改原 Prefab 资产。
         static void ValidateDemoGeometry(GameObject prefab,List<string> errors)
         {
             var scene = EditorSceneManager.NewPreviewScene();

@@ -3,13 +3,15 @@ using UnityEngine.UI;
 
 namespace SegmentUI
 {
-    /// <summary>Rounded rectangle fill or inset outline, with geometry instead of a square sprite approximation.</summary>
+    /// <summary>通过网格绘制圆角填充或内缩描边，避免用方形精灵近似圆角。</summary>
+    // 使用 UGUI 网格绘制圆角填充或描边，作为默认指示器的视觉元素。
     [RequireComponent(typeof(CanvasRenderer))]
     public class SegmentShapeGraphic : MaskableGraphic
     {
         public float Radius = 12;
         public float Stroke;
         const int Steps = 8;
+        /// <summary>形状参数变化时重建顶点；仅绘制，不参与分页逻辑。</summary>
         protected override void OnPopulateMesh(VertexHelper vh)
         {
             vh.Clear(); var r = rectTransform.rect;

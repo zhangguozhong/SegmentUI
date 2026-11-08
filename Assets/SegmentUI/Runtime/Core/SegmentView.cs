@@ -4,6 +4,7 @@ using UnityEngine;
 
 namespace SegmentUI
 {
+    /// <summary>分页业务入口：以稳定 PageId 管理数据、选择与展示周期；Unity 主线程调用。</summary>
     public sealed partial class SegmentView : MonoBehaviour
     {
         [SerializeField] SegmentPager pager;
@@ -19,24 +20,42 @@ namespace SegmentUI
         string pendingSelection;
         bool pendingAnimated;
         SegmentSelectionSource selectionSource;
+        /// <summary>底层分页位置与动画驱动器；业务切页优先调用 Select。</summary>
         public SegmentPager Pager => pager;
+        /// <summary>标题栏实例，可读取标题项或配置样式；允许为空。</summary>
         public SegmentBar Bar => bar;
+        /// <summary>当前允许分页的逻辑 ID 顺序，RTL 不改变此顺序。</summary>
         public IReadOnlyList<string> EnabledPageIds => enabledIds.AsReadOnly();
+        /// <summary>已正式提交的页面 ID；动画目标不会提前覆盖它。</summary>
         public string CurrentPageId { get; private set; }
+        /// <summary>当前切页目标；提交或取消后清空。</summary>
         public string TargetPageId { get; private set; }
+        /// <summary>交互状态，用于区分待判方向、横纵拖拽、吸附及暂停。</summary>
         public SegmentPhase Phase { get; internal set; } = SegmentPhase.Empty;
+        /// <summary>是否正在执行分页吸附动画，不包含手指直接拖动。</summary>
         public bool IsTransitioning => pager != null && pager.IsSettling;
+        /// <summary>综合自身、祖先页面和组件启用状态得到的有效展示状态。</summary>
         public bool IsPresented => presented && ancestorPresented && isActiveAndEnabled;
+        /// <summary>页面已展示、拥有焦点且视口有效时才允许开始新输入。</summary>
         public bool CanReceiveInput => IsPresented && focused && pager != null && pager.HasLayout && CurrentPageId != null;
+        /// <summary>SetPages 提交次数；纯视觉 UpdateItem 不递增。</summary>
         public int DataVersion { get; private set; }
+        /// <summary>最近一次创建或选择失败的说明；成功开始新选择时清空。</summary>
         public string LastError { get; private set; }
+        /// <summary>可选事件诊断缓冲；按需开启以跟踪选择、提交和取消。</summary>
         public SegmentDiagnostics Diagnostics { get; } = new SegmentDiagnostics();
+        /// <summary>仅正式提交的页面 ID 改变后通知，不在拖拽预览时通知。</summary>
         public event Action<SegmentSelectionChange> SelectionChanged;
+        /// <summary>连续逻辑分页位置通知；值可以位于两个索引之间。</summary>
         public event Action<float> TransitionProgress;
+        /// <summary>点击当前已提交标题时通知，代码重复 Select 不触发。</summary>
         public event Action<string> ItemReselected;
+        /// <summary>创建或绑定失败时通知目标 ID 与错误信息。</summary>
         public event Action<string, string> SelectionFailed;
+        /// <summary>只查询已经创建的页面，不触发懒加载；未创建时返回 null。</summary>
         public SegmentPage GetPage(string id) => host?.Get(id);
 
+        /// <summary>绑定前注入分页器与可选标题栏；初始化后不能重复配置。</summary>
         public void Configure(SegmentPager pager, SegmentBar bar)
         {
             if (configured) throw new InvalidOperationException("Configure before binding pages.");
@@ -60,6 +79,7 @@ namespace SegmentUI
             if (configured && pages.Count > 0) return;
             if (pager != null && initialPages.Length > 0) SetPages(initialPages, string.IsNullOrEmpty(initialPageId) ? null : initialPageId);
         }
+        /// <summary>校验并复制整份描述列表，取消当前交互后协调页面；省略初始 ID 时优先保留当前页。</summary>
         public void SetPages(IReadOnlyList<SegmentPageDescriptor> input, string initialPageId = null)
         {
             if (disposing) return;
@@ -92,6 +112,7 @@ namespace SegmentUI
             if (bar != null) bar.ValidateConfiguration(result);
             return result;
         }
+        /// <summary>结构更新先取消交互，再协调实例、槽位与标题；仅最终候选页进入展示周期。</summary>
         void ApplyPages(List<SegmentPageDescriptor> snapshot, string initial)
         {
             CancelInteraction(SegmentCancelReason.DataChanged);
@@ -150,6 +171,7 @@ namespace SegmentUI
             return true;
         }
 
+        /// <summary>按 ID 请求切页；回调重入或手势进行中会排队，返回值区分接受、排队和无效目标。</summary>
         public SegmentSelectionResult Select(string pageId, bool animated = true) => RequestSelect(pageId, animated, SegmentSelectionSource.Code);
         SegmentSelectionResult RequestSelect(string id, bool animated, SegmentSelectionSource source)
         {
@@ -166,6 +188,7 @@ namespace SegmentUI
             Run(() => StartSelection(id, animated, source));
             return LastError == null ? SegmentSelectionResult.Accepted : SegmentSelectionResult.Unavailable;
         }
+        /// <summary>先准备目标页，成功后才启动动画；准备失败保持可恢复的当前状态。</summary>
         void StartSelection(string id, bool animated, SegmentSelectionSource source)
         {
             if (Diagnostics.Enabled) Diagnostics.Record("Select " + id + " via " + source);
@@ -183,6 +206,7 @@ namespace SegmentUI
             if (mutating) { Commit(index); return; }
             Run(() => Commit(index));
         }
+        /// <summary>吸附结束才提交选择：先退出旧页，再进入新页，最后发布选择通知。</summary>
         void Commit(int index)
         {
             string next = enabledIds[index], old = CurrentPageId;
@@ -210,6 +234,7 @@ namespace SegmentUI
             if (mutating) { Render(); Notify(() => TransitionProgress?.Invoke(position)); }
             else Run(() => { Render(); Notify(() => TransitionProgress?.Invoke(position)); });
         }
+        /// <summary>按当前连续位置准备相邻预览页；仅控制显示和射线，不把预览当成 Enter。</summary>
         void Render()
         {
             if (!configured || rebuilding) return;
@@ -233,6 +258,7 @@ namespace SegmentUI
         }
         void OnLayoutChanged()
         { CancelInteraction(SegmentCancelReason.LayoutChanged); host?.Layout(enabledIds); Render(); }
+        /// <summary>释放手势、停止横纵惯性并回到已提交页；不销毁缓存页面。</summary>
         public void CancelInteraction(SegmentCancelReason reason)
         {
             if (!configured) return;
@@ -242,12 +268,14 @@ namespace SegmentUI
             pager.SetPosition(Mathf.Max(0, enabledIds.IndexOf(CurrentPageId)));
             RefreshPhase(); Render();
         }
+        /// <summary>宿主导航隐藏/返回时主动设置展示状态；CanvasGroup 隐藏不会自动触发生命周期。</summary>
         public void SetPresented(bool value)
         {
             if (disposing) return;
             if (mutating) { commands.Enqueue(() => SetPresented(value)); return; }
             Run(() => { presented = value; UpdatePresentation(SegmentCancelReason.Hidden); });
         }
+        /// <summary>父页面展示状态向子分页传播，同时保留子分页当前选择。</summary>
         internal void SetAncestorPresented(bool value, SegmentCancelReason reason)
         {
             if (disposing) return;
@@ -262,10 +290,13 @@ namespace SegmentUI
         }
         void RefreshPhase()
         { Phase = CurrentPageId == null ? SegmentPhase.Empty : !IsPresented || !focused || !pager.HasLayout ? SegmentPhase.Suspended : pager.IsSettling ? SegmentPhase.Settling : SegmentPhase.Idle; }
+        /// <summary>用单个指示器模板替换现有指示器；null 表示关闭。</summary>
         public void SetIndicator(SegmentIndicator template) => SetIndicators(template == null ? Array.Empty<SegmentIndicator>() : new[] { template });
+        /// <summary>整体替换指示器模板数组；空数组关闭，模板在标题栏的前景/背景层实例化。</summary>
         public void SetIndicators(SegmentIndicator[] templates) { EnsureConfigured(); if (bar != null) { bar.SetIndicators(templates); Render(); } }
         void PublishSelection(string previous, string current, SegmentSelectionSource source) => Notify(() => SelectionChanged?.Invoke(new SegmentSelectionChange(previous, current, source)));
         void Notify(Action action) => SegmentPage.InvokeSafe(action);
+        /// <summary>状态变更期间拦截回调重入，当前操作完成后再执行后续命令。</summary>
         void Run(Action action)
         {
             bool previous = mutating; mutating = true;
@@ -274,6 +305,7 @@ namespace SegmentUI
         }
         bool draining;
         void Schedule(Action action) { if (mutating) commands.Enqueue(() => Run(action)); else Run(action); }
+        /// <summary>每次最多执行 32 条，避免回调持续生成命令导致单帧无限循环。</summary>
         void DrainCommands()
         {
             if (draining || mutating) return;
@@ -286,6 +318,7 @@ namespace SegmentUI
         void OnDisable() { if (configured && !disposing) Schedule(() => UpdatePresentation(SegmentCancelReason.Disabled)); }
         void OnApplicationFocus(bool value) { if (disposing) return; Schedule(() => { focused = value; if (!value) CancelInteraction(SegmentCancelReason.FocusLost); else { RefreshPhase(); Render(); } }); }
         void OnApplicationPause(bool value) => OnApplicationFocus(!value);
+        /// <summary>销毁时先阻断新操作并解绑事件，再释放页面与排队命令。</summary>
         void OnDestroy()
         {
             if (!configured) return;
@@ -299,7 +332,7 @@ namespace SegmentUI
             if (bar != null) bar.ItemClicked -= OnItemClicked;
             host.Dispose(); commands.Clear(); configured = false;
         }
-        // Implemented by the input adapter partial. Kept separate from binding and presentation.
+        // 由输入适配分部实现，与数据绑定和展示逻辑分开维护。
         internal bool IsGestureActive => Phase == SegmentPhase.PendingGesture || Phase == SegmentPhase.DraggingHorizontal || Phase == SegmentPhase.DraggingVertical;
         partial void CancelGesture(SegmentCancelReason reason);
     }

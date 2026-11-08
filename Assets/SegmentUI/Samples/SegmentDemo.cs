@@ -3,6 +3,7 @@ using UnityEngine.UI;
 
 namespace SegmentUI.Samples
 {
+    /// <summary>示例入口：组织页面、按钮、方向与压力演示，不属于核心业务 API。</summary>
     public sealed class SegmentDemo : MonoBehaviour
     {
         public const int CurrentSchema = 9;
@@ -18,6 +19,7 @@ namespace SegmentUI.Samples
         bool initialized, alternate;
         float nextStress;
         int stressRemaining;
+        /// <summary>通过固定 PageId 配置演示数据与操作入口；初始化失败后可补齐引用再调用。</summary>
         public void Initialize()
         {
             if (initialized) return;
@@ -48,11 +50,13 @@ namespace SegmentUI.Samples
         void Start() { Initialize(); }
         public void StartStress() { stressRemaining = 30; nextStress = 0; }
         public void CancelInput() { stressRemaining = 0; View.CancelInteraction(SegmentCancelReason.PointerCancelled); }
+        /// <summary>重置已创建页面中的列表，包括已经懒加载的嵌套子页。</summary>
         public void ResetLists()
         {
             CancelInput();
             foreach (var page in View.GetComponentsInChildren<SegmentDemoPage>(true)) page.ResetList();
         }
+        /// <summary>切换单一下划线与背景/描边组合，演示多个指示器同时工作。</summary>
         public void ToggleStyle()
         {
             alternate = !alternate;

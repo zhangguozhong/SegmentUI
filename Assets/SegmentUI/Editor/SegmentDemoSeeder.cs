@@ -10,7 +10,8 @@ using UnityEngine.UI;
 
 namespace SegmentUI.Editor
 {
-    /// <summary>Only the sample owns a safe area. Header/footer own fixed heights; Middle absorbs height changes.</summary>
+    /// <summary>仅示例宿主管理安全区；头部/底部固定高度，中间区域吸收高度变化。</summary>
+    // 生成默认标题/指示器、演示页面和场景；布局完成后预收集 LTR 基准。
     public static class SegmentDemoSeeder
     {
         public const string Folder = "Assets/SegmentUI/Samples/Generated";
@@ -18,6 +19,7 @@ namespace SegmentUI.Editor
         public const string ScenePath = Folder + "/SegmentDemo.unity";
         public const float HeaderHeight = 208, FooterHeight = 224, Gap = 16, Inset = 24, BarHeight = 112;
         static readonly Color CanvasColor = new Color(.035f,.055f,.085f), Panel = new Color(.07f,.105f,.15f), Cyan = new Color(.3f,.86f,.94f);
+        /// <summary>创建或更新示例资产，保留稳定路径与引用；仅由编辑器菜单或验证流程调用。</summary>
         [MenuItem("Tools/Segment UI/Generate Demo")]
         public static void Generate()
         {
@@ -76,8 +78,9 @@ namespace SegmentUI.Editor
             if (!Application.isBatchMode) EditorSceneManager.CloseScene(scene,true);
             AssetDatabase.SaveAssets();
         }
-        // External prefab replacement can leave loaded component references null even
-        // when their GUID/fileID pairs on disk are valid. Reimport dependencies first.
+        // 外部替换 Prefab 后，编辑器已加载的组件引用可能仍为空，
+        // 即使磁盘 GUID/fileID 有效；应先重新导入依赖。
+        /// <summary>重新导入页面与演示引用，用于修复编辑器缓存中的空引用，不保存当前场景。</summary>
         [MenuItem("Tools/Segment UI/Reimport Demo References")]
         public static void ReimportDemoReferences()
         {
@@ -92,6 +95,7 @@ namespace SegmentUI.Editor
         static bool HasPageReferences(SegmentDemo demo) => demo != null && demo.PageA != null
             && demo.PageB != null && demo.PageNative != null && demo.PageNested != null
             && demo.PageNested.NativePagePrefab != null;
+        /// <summary>先确保示例资产存在，再打开生成的演示场景。</summary>
         [MenuItem("Tools/Segment UI/Open Demo")]
         public static void OpenDemo() { Generate(); EditorSceneManager.OpenScene(ScenePath); }
         static SegmentNestedDemoPage NestedPage(GameObject template, SegmentDemoPage nativePage)
@@ -169,7 +173,7 @@ namespace SegmentUI.Editor
         }
         static GameObject Save(GameObject root,string path)
         {
-            // Prefabs carry LTR baselines. Runtime collection only fills dynamic gaps.
+            // 预制体预存 LTR 基准，运行时收集只补充动态缺失内容。
             foreach (var adapter in root.GetComponentsInChildren<RtlLayoutRoot>(true)) adapter.CaptureLayout();
             var asset = PrefabUtility.SaveAsPrefabAsset(root,path);
             Object.DestroyImmediate(root); return asset;

@@ -4,6 +4,7 @@ using UnityEngine;
 
 namespace SegmentUI
 {
+    /// <summary>页面资源管理器：槽位提前创建，页面按需创建，按来源负责销毁、归还或恢复借用状态。</summary>
     internal sealed class SegmentPageHost
     {
         sealed class Entry
@@ -34,6 +35,7 @@ namespace SegmentUI
         readonly SegmentPager pager;
         public SegmentPageHost(SegmentPager pager) { this.pager = pager; }
         public SegmentPage Get(string id) => id != null && entries.TryGetValue(id, out var e) ? e.Page : null;
+        /// <summary>按 ID 与来源协调缓存；仅 PageRevision 改变时重绑实例，来源变化或移除时释放。</summary>
         public void Reconcile(IReadOnlyList<SegmentPageDescriptor> pages)
         {
             failures.Clear();
@@ -86,7 +88,9 @@ namespace SegmentUI
             foreach (var pair in new List<KeyValuePair<SegmentPage, BorrowedSlot>>(borrowed))
                 if (!keep.Contains(pair.Key)) { RestoreBorrowed(pair.Value); borrowed.Remove(pair.Key); }
         }
+        /// <summary>显式选择时清除该页的失败记录，允许重新尝试创建。</summary>
         public void AllowRetry(string id) => failures.Remove(id);
+        /// <summary>懒创建并绑定页面；工厂必须将实例放入给定槽位，失败会记录并清理半成品。</summary>
         public SegmentPage Prepare(string id, int index)
         {
             if (failures.TryGetValue(id, out var error)) throw error;
@@ -125,12 +129,14 @@ namespace SegmentUI
             }
             catch (Exception failure) { failures[id] = failure; Release(e); throw; }
         }
+        /// <summary>仅将启用页的槽位提交给布局器，不压缩尚未实例化页面的占位。</summary>
         public void Layout(IReadOnlyList<string> enabled)
         {
             var ordered = new List<RectTransform>();
             foreach (var id in enabled) if (slots.TryGetValue(id, out var slot)) ordered.Add(slot.Rect);
             pager.SetSlots(ordered);
         }
+        /// <summary>只显示当前插值涉及的两页；未稳定提交的预览页不开放业务交互。</summary>
         public void Render(float position, IReadOnlyList<string> enabled, string current, bool interactive, bool visible)
         {
             string left = enabled.Count > 0 ? enabled[Mathf.Clamp(Mathf.FloorToInt(position), 0, enabled.Count - 1)] : null;
@@ -148,6 +154,7 @@ namespace SegmentUI
         public void Present(string id, bool value, SegmentCancelReason reason) => Get(id)?.Present(value, reason);
         public void ExitAll(SegmentCancelReason reason)
         { foreach (var e in new List<Entry>(entries.Values)) if (e.Page != null) e.Page.Present(false, reason); }
+        /// <summary>停止全部已创建页及嵌套列表惯性，避免新的分页手势与旧滚动同时推进。</summary>
         public void StopVerticalMotion()
         {
             foreach (var e in entries.Values)
@@ -164,12 +171,14 @@ namespace SegmentUI
             foreach (var e in borrowed.Values) RestoreBorrowed(e);
             borrowed.Clear();
         }
+        /// <summary>恢复借用槽位原有 CanvasGroup 属性；仅删除本组件额外创建的 Group。</summary>
         static void RestoreBorrowed(BorrowedSlot slot)
         {
             if (slot.Group == null) return;
             if (slot.OwnsGroup) Destroy(slot.Group);
             else { slot.Group.alpha = slot.Alpha; slot.Group.interactable = slot.Interactable; slot.Group.blocksRaycasts = slot.BlocksRaycasts; }
         }
+        /// <summary>先结束业务生命周期，再按来源释放；工厂回收与借用实例不走普通 Prefab 销毁路径。</summary>
         static void Release(Entry e)
         {
             if (e.Group != null) { e.Group.alpha = 0; e.Group.interactable = false; e.Group.blocksRaycasts = false; }
@@ -178,13 +187,13 @@ namespace SegmentUI
                 e.Page.Release();
                 if (e.Descriptor.Source.Kind == PageSourceKind.Factory)
                 {
-                    // A factory may pool without reparenting. Detach before releasing our slot.
+                    // 工厂可能只入池而不重挂，因此释放自有槽位前先脱离页面。
                     if (e.Page.transform.IsChildOf(e.Slot)) e.Page.transform.SetParent(null, false);
                     SegmentPage.InvokeSafe(() => e.Descriptor.Source.Factory.Release(e.Page));
                 }
                 else if (e.Descriptor.Source.Kind == PageSourceKind.Prefab)
                 {
-                    // A failed page can be retried in its persistent slot before deferred Destroy runs.
+                    // 延迟 Destroy 前同一槽位可能重试创建，先隐藏失败页避免短暂重复显示。
                     e.Page.gameObject.SetActive(false);
                     Destroy(e.Page.gameObject);
                 }

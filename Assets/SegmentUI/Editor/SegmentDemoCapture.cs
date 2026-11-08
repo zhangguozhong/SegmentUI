@@ -6,9 +6,11 @@ using UnityEngine.UI;
 
 namespace SegmentUI.Editor
 {
-    /// <summary>Offscreen render for layout review; a grey output must never count as visual acceptance.</summary>
+    /// <summary>用于布局检查的离屏渲染；灰屏输出不能视为视觉验收通过。</summary>
+    // 离屏生成演示截图并检查目标竖屏布局，用于人工视觉检查。
     public static class SegmentDemoCapture
     {
+        /// <summary>批量实例化演示并渲染目标尺寸，结束后清理临时对象。</summary>
         public static void Capture()
         {
             SegmentDemoSeeder.Generate();

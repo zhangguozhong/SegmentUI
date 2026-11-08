@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 namespace SegmentUI
 {
-    /// <summary>Non-raycasting drag target; click targets remain the original business controls.</summary>
+    /// <summary>不参与射线命中的拖拽代理；点击目标仍是原业务控件。</summary>
     [AddComponentMenu("")]
     public sealed class SegmentScrollDragProxy : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
     {

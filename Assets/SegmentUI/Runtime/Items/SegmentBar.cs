@@ -9,21 +9,33 @@ namespace SegmentUI
     public enum SegmentBarLayout { Equal, ContentWidth }
     [Serializable] public sealed class SegmentExistingItem { public string PageId; public SegmentItemView View; }
 
+    /// <summary>维护标题实例、点击映射和指示器；标题滚动独立于内容分页。</summary>
     [RequireComponent(typeof(RectTransform))]
     public class SegmentBar : MonoBehaviour
     {
+        /// <summary>标题项容器，其排列和宽度由标题栏统一管理。</summary>
         public RectTransform ItemsRoot;
+        /// <summary>没有单项 ItemTemplate 时使用的默认标题模板。</summary>
         public SegmentItemView DefaultTemplate;
+        /// <summary>首次成功绑定时安装的默认指示器；显式 SetIndicators 后不再自动安装。</summary>
         [Tooltip("Installed once on first Bind unless SetIndicators was called explicitly. Empty SetIndicators disables defaults.")]
         public SegmentIndicator[] DefaultIndicators = Array.Empty<SegmentIndicator>();
+        /// <summary>指示器的背景/前景挂载层，不应拦截射线。</summary>
         public RectTransform BackgroundLayer, ForegroundLayer;
+        /// <summary>只滚动标题区域，与页面横向分页分离。</summary>
         public ScrollRect TitleScroll;
+        /// <summary>Equal 等分且保留最小热区，ContentWidth 按标题内容计算宽度。</summary>
         public SegmentBarLayout LayoutMode;
+        /// <summary>标题最小宽度、内容留白及项间距；有效点击宽度至少保留 96 UI 单位。</summary>
         public float MinimumItemWidth = 96, ItemPadding = 32, Spacing = 0;
+        /// <summary>使用宿主已有标题实例及 ID 映射，解绑时隐藏但不销毁。</summary>
         public bool UseExistingItems;
+        /// <summary>已有标题模式下的唯一 PageId 映射，每项必须带有效 Button。</summary>
         public SegmentExistingItem[] ExistingItems = Array.Empty<SegmentExistingItem>();
+        /// <summary>选择变化时居中目标；关闭则只保证目标可见，UpdateItem 不主动触发两者。</summary>
         public bool AutoCenter = true;
         bool rightToLeft;
+        /// <summary>切换标题物理排列并通知内部布局适配器，PageId 映射保持不变。</summary>
         public bool RightToLeft
         {
             get => rightToLeft;
@@ -38,7 +50,9 @@ namespace SegmentUI
         }
         public string TargetPageId { get; set; }
         public int TransitionVersion { get; set; }
+        /// <summary>热区或视口不满足要求时的诊断信息，此时相关按钮被禁用。</summary>
         public string LayoutError { get; private set; }
+        /// <summary>有效标题点击通知页面 ID，分页宿主决定是否接受选择。</summary>
         public event Action<string> ItemClicked;
         readonly Dictionary<string, SegmentItemView> items = new Dictionary<string, SegmentItemView>();
         readonly Dictionary<SegmentItemView, UnityAction> listeners = new Dictionary<SegmentItemView, UnityAction>();
@@ -53,11 +67,13 @@ namespace SegmentUI
         IReadOnlyList<string> lastIds;
         string lastCurrent;
         SegmentSelectionSource lastSource;
+        /// <summary>整体交互开关，最终按钮可用性还取决于 Item.IsEnabled 与有效热区。</summary>
         public bool Interactable
         {
             get => interactable;
             set { interactable = value; UpdateInteractable(); }
         }
+        /// <summary>注入标题容器、默认模板和指示器层；装饰层统一关闭射线。</summary>
         public void Configure(RectTransform itemsRoot, SegmentItemView defaultTemplate, RectTransform backgroundLayer, RectTransform foregroundLayer)
         {
             ItemsRoot = itemsRoot; DefaultTemplate = defaultTemplate; BackgroundLayer = backgroundLayer; ForegroundLayer = foregroundLayer;
@@ -89,6 +105,7 @@ namespace SegmentUI
             TitleScroll.movementType = ScrollRect.MovementType.Clamped;
             TitleScroll.onValueChanged.RemoveListener(OnTitleScrolled); TitleScroll.onValueChanged.AddListener(OnTitleScrolled);
         }
+        /// <summary>绑定前检查模板、现有标题映射及按钮引用，避免更新到一半才发现无效配置。</summary>
         public void ValidateConfiguration(IReadOnlyList<SegmentPageDescriptor> pages)
         {
             if (ItemsRoot == null) throw new ArgumentException("SegmentBar requires an ItemsRoot.");
@@ -119,10 +136,11 @@ namespace SegmentUI
                 else if ((page.ItemTemplate != null ? page.ItemTemplate : DefaultTemplate).Button == null) throw new ArgumentException("Segment Item template requires a Button for " + page.Id);
             }
         }
+        /// <summary>结构性重绑会清理并重新建立标题及点击监听；只更新显示内容应使用 SegmentView.UpdateItem。</summary>
         public void Bind(IReadOnlyList<SegmentPageDescriptor> pages)
         {
             ValidateConfiguration(pages); ClearItems(); EnsureScroll(); PrepareLayers();
-            // The mapping may contain host-owned Items absent from the current snapshot, including on first bind.
+            // 映射可能包含当前快照没有使用的宿主标题，首次绑定时也需隐藏这些项。
             if (UseExistingItems) foreach (var entry in ExistingItems) entry.View.gameObject.SetActive(false);
             foreach (var page in pages)
             {
@@ -159,6 +177,7 @@ namespace SegmentUI
             }
             finally { updatingItem = false; }
         }
+        /// <summary>按稳定页面 ID 查找当前标题实例，不创建新实例。</summary>
         public SegmentItemView GetItem(string id) => id != null && items.TryGetValue(id, out var item) ? item : null;
         void ClearItems()
         {
@@ -191,6 +210,7 @@ namespace SegmentUI
                 return hash;
             }
         }
+        /// <summary>由布局签名决定是否重算宽度；内容宽度模式按文字、图标和角标计算。</summary>
         void LayoutItems()
         {
             if (ItemsRoot == null || ViewWidth <= 0) { UpdateInteractable(); return; }
@@ -259,10 +279,11 @@ namespace SegmentUI
                 }
                 item.Button.interactable = interactable && item.IsEnabled && valid;
             }
-            // A controlled receiver must stay enabled during its own accepted gesture.
-            // SegmentGestureScope gates new input; disabling here would cancel the in-flight owner.
+            // 已授权的滚动接收器在手势期间必须保持启用。
+            // 新输入由手势作用域拦截；这里禁用会意外取消正在进行的手势。
             if (TitleScroll != null) TitleScroll.enabled = usable && (TitleScroll is SegmentScrollRect || interactable);
         }
+        /// <summary>使用连续分页位置计算标题权重和指示器帧，几何统一转换到指示器所在层。</summary>
         public void Render(float position, IReadOnlyList<string> enabledIds, string currentId, SegmentSelectionSource source)
         {
             if (rendering) return;
@@ -326,10 +347,11 @@ namespace SegmentUI
             TitleScroll.StopMovement();
             ItemsRoot.anchoredPosition = new Vector2(-Mathf.Clamp(offset, 0, Mathf.Max(0, ItemsRoot.rect.width - ViewWidth)), 0);
         }
+        /// <summary>先验证并创建新指示器，成功后才释放旧指示器；空数组显式关闭。</summary>
         public void SetIndicators(SegmentIndicator[] templates)
         {
             var requested = templates ?? Array.Empty<SegmentIndicator>();
-            // Validate the full replacement before touching the existing visuals or default-install state.
+            // 完整验证新指示器配置后再替换旧视觉和默认安装状态。
             foreach (var template in requested)
             {
                 if (template == null) continue;
@@ -364,6 +386,7 @@ namespace SegmentUI
         void OnTitleScrolled(Vector2 _) { RefreshVisuals(); }
         void OnRectTransformDimensionsChange() { if (!isActiveAndEnabled || rendering) return; hasLayout = false; lastCentered = null; RefreshVisuals(); }
         void LateUpdate() { RefreshVisuals(); }
+        /// <summary>解除标题滚动监听、点击映射和指示器附加效果，避免复用残留事件。</summary>
         void OnDestroy()
         {
             if (TitleScroll != null) TitleScroll.onValueChanged.RemoveListener(OnTitleScrolled);
