@@ -1,0 +1,1 @@
+{"name": "SegmentUI.Tests.PlayMode", "references": ["SegmentUI", "SegmentUI.Samples", "Unity.ugui", "RTLLayout", "SegmentUI.RTLLayout"], "optionalUnityReferences": ["TestAssemblies"], "autoReferenced": false}

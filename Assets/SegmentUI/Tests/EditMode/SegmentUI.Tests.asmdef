@@ -1,0 +1,1 @@
+{"name":"SegmentUI.Tests","references":["SegmentUI","Unity.ugui"],"includePlatforms":["Editor"],"optionalUnityReferences":["TestAssemblies"]}

@@ -1,0 +1,1 @@
+{"name": "SegmentUI.Editor", "references": ["SegmentUI", "SegmentUI.Samples", "Unity.ugui", "RTLLayout", "SegmentUI.RTLLayout"], "includePlatforms": ["Editor"]}
