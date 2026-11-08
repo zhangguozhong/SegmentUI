@@ -22,6 +22,22 @@ https://github.com/zhangguozhong/SegmentUI.git?path=Assets/SegmentUI#v0.1.0
 
 完整包包含 RTLLayout 桥接、默认 Prefab 和示例工具，需要同时保留 RTLLayout 的 Git 依赖。
 
+#### 为什么需要先安装 RTLLayout
+
+Unity 2022.3 的 UPM 只支持在工程 `Packages/manifest.json` 中声明 Git URL，不支持在包的 `package.json` 中声明另一个 Git 包的地址。详见 [Unity Git 依赖说明](https://docs.unity3d.com/2022.3/Documentation/Manual/upm-git.html)。
+
+SegmentUI 已声明 `com.zhangguozhong.rtllayout: 0.1.0` 依赖，但包名和版本不会告诉 UPM 对应的 Git 仓库地址。因此当前版本不会自动从 GitHub 安装 RTLLayout，请按上面的顺序分别添加两个包；使用 SegmentUI 期间不要移除 RTLLayout。
+
+如果已经先添加 SegmentUI 并遇到 RTLLayout 依赖解析错误，将下面两项合并到工程 `Packages/manifest.json` 的 `dependencies` 中，保留已有的其他依赖，保存后等待 Unity 重新解析：
+
+```json
+"com.zhangguozhong.rtllayout": "https://github.com/zhangguozhong/RTLLayout.git?path=Assets/RTLLayout#v0.1.0",
+"com.zhangguozhong.segmentui": "https://github.com/zhangguozhong/SegmentUI.git?path=Assets/SegmentUI#v0.1.0"
+```
+
+当前尚未提供注册表安装或一键安装器。后续如提供 UPM 注册表，可在配置注册表后由 UPM 自动安装依赖；如提供独立 Git 安装器，可一次添加两个包。目前仍使用上述 Git URL 或 manifest 配置方式。
+
+
 ### 目录复制安装
 
 也可将仓库的 `Assets/SegmentUI` 目录（含 `.meta`）复制到工程 `Assets` 下。同时复制 RTLLayout 仓库的 `Assets/RTLLayout`。仅需分页核心时，可只导入 `Runtime` 并自行制作 Prefab。保留 Tests 目录时需安装 Unity Test Framework。
