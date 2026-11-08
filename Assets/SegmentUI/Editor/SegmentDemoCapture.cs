@@ -16,7 +16,7 @@ namespace SegmentUI.Editor
             SegmentDemoSeeder.Generate();
             var directory = Path.GetFullPath("Docs/SegmentUIVerification"); Directory.CreateDirectory(directory);
             foreach (var size in new[] { new Vector2Int(720,1280),new Vector2Int(1080,1920),new Vector2Int(1080,2400) })
-                for (int preset = 0; preset < 5; preset++) CaptureOne(directory,size.x,size.y,preset);
+                for (int preset = 0; preset < 7; preset++) CaptureOne(directory,size.x,size.y,preset);
         }
         static void CaptureOne(string directory,int width,int height,int preset)
         {
@@ -36,13 +36,20 @@ namespace SegmentUI.Editor
                 if (preset == 2) demo.View.Select("native", false);
                 if (preset == 3) demo.View.Select("nested", false);
                 if (preset == 4) { demo.ToggleDirection(); demo.View.Select("nested", false); }
+                if (preset >= 5)
+                {
+                    demo.ToggleStyle(); demo.ToggleLiveUpdates();
+                    for (int i = 0; i < 98; i++) demo.UpdateLiveItem();
+                    if (preset == 6) demo.ToggleDirection();
+                    demo.View.Select("activity", false);
+                }
                 foreach (var bridge in root.GetComponentsInChildren<SegmentUI.Integrations.SegmentRtlLayoutBridge>(true)) bridge.Synchronize();
                 demo.UpdateDiagnostics();
                 Canvas.ForceUpdateCanvases(); demo.View.Pager.RefreshLayout();
                 foreach (var page in root.GetComponentsInChildren<SegmentDemoPage>(true)) LayoutRebuilder.ForceRebuildLayoutImmediate(page.Scroll.content);
                 Canvas.ForceUpdateCanvases(); camera.Render(); RenderTexture.active = target;
                 var image = new Texture2D(width,height,TextureFormat.RGB24,false);
-                try { image.ReadPixels(new Rect(0,0,width,height),0,0); image.Apply(); File.WriteAllBytes(Path.Combine(directory,"segment-" + width + "x" + height + (preset == 0 ? "-line" : preset == 1 ? "-pill" : preset == 2 ? "-native" : preset == 3 ? "-nested" : "-nested-rtl") + ".png"),image.EncodeToPNG()); }
+                try { image.ReadPixels(new Rect(0,0,width,height),0,0); image.Apply(); File.WriteAllBytes(Path.Combine(directory,"segment-" + width + "x" + height + (preset == 0 ? "-line" : preset == 1 ? "-pill" : preset == 2 ? "-native" : preset == 3 ? "-nested" : preset == 4 ? "-nested-rtl" : preset == 5 ? "-live" : "-live-rtl") + ".png"),image.EncodeToPNG()); }
                 finally { Object.DestroyImmediate(image); }
             }
             finally { RenderTexture.active = previous; camera.targetTexture = null; Object.DestroyImmediate(root); Object.DestroyImmediate(cameraObject); target.Release(); Object.DestroyImmediate(target); }

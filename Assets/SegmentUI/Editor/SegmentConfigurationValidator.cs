@@ -81,7 +81,7 @@ namespace SegmentUI.Editor
                 foreach (var button in demo.GetComponentsInChildren<Button>(true)) CheckHit(button,errors,false);
                 ValidateDemoGeometry(demo,errors);
                 var sample = demo.GetComponent<SegmentDemo>();
-                if (sample == null || sample.View == null || sample.PageA == null || sample.PageB == null || sample.PageNative == null || sample.PageNested == null || sample.DirectionButton == null || sample.Diagnostics == null) errors.Add("Demo page sources/view/diagnostics references are required.");
+                if (sample == null || sample.View == null || sample.PageA == null || sample.PageB == null || sample.PageNative == null || sample.PageNested == null || sample.DirectionButton == null || sample.LiveUpdateButton == null || sample.Diagnostics == null) errors.Add("Demo page sources/view/diagnostics references are required.");
             }
             return errors;
         }
@@ -111,6 +111,10 @@ namespace SegmentUI.Editor
                         LayoutRebuilder.ForceRebuildLayoutImmediate(rootRect);
                         var sample = root.GetComponent<SegmentDemo>();
                         sample.Initialize(); sample.View.Select("nested", false);
+                        sample.ToggleLiveUpdates();
+                        for (int update = 0; update < 98; update++) sample.UpdateLiveItem();
+                        sample.UpdateDiagnostics();
+                        sample.ToggleStyle();
                         foreach (bool rtl in new[] { false, true })
                         {
                             sample.View.SetDirection(rtl ? SegmentLayoutDirection.RightToLeft : SegmentLayoutDirection.LeftToRight);
@@ -122,6 +126,12 @@ namespace SegmentUI.Editor
                             }
                             foreach (var layout in root.GetComponentsInChildren<LayoutGroup>(true)) LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)layout.transform);
                             Canvas.ForceUpdateCanvases();
+                            foreach (var id in sample.View.EnabledPageIds)
+                            {
+                                var label = sample.View.Bar.GetItem(id).Label;
+                                if (label != null && label.preferredWidth > label.rectTransform.rect.width + .1f)
+                                    errors.Add(size + ": live title should fit its content-width item: " + id);
+                            }
                             foreach (var button in root.GetComponentsInChildren<Button>(true))
                             {
                                 CheckHit(button,errors,true);

@@ -37,6 +37,37 @@ namespace SegmentUI.Tests
             if (events != null && !events.transform.IsChildOf(demo.transform)) Object.Destroy(events);
             Object.Destroy(demo); yield return null;
         }
+        [UnityTest] public IEnumerator LiveDemoUpdatesDuringDragAndAnimationAndStopsWhenToggledOff()
+        {
+            var live = demo.transform.Find("SafeAreaContent/Footer/Controls/Live");
+            Assert.That(live, Is.Not.Null, "Demo needs a LIVE control for timer-driven UpdateItem.");
+            var button = live.GetComponent<Button>(); var label = button.GetComponentInChildren<Text>();
+            Assert.That(label.text, Is.EqualTo("LIVE: OFF"));
+            var item = view.Bar.GetItem("activity"); var originalIcon = item.Icon.sprite;
+            button.onClick.Invoke(); Assert.That(label.text, Is.EqualTo("LIVE: ON"));
+            var scroll = view.GetPage("dispatch").GetComponentInChildren<SegmentScrollRect>();
+            var p = new PointerEventData(EventSystem.current) { pointerId = 31, button = PointerEventData.InputButton.Left,
+                position = new Vector2(200, 200), pressPosition = new Vector2(200, 200) };
+            scroll.OnInitializePotentialDrag(p); p.delta = new Vector2(-100, 0); p.position += p.delta;
+            scroll.OnBeginDrag(p); scroll.OnDrag(p);
+            string before = item.Label.text; int version = view.Pager.Version; float position = view.Pager.Position;
+            yield return new WaitForSecondsRealtime(.16f);
+            Assert.That(item.Label.text, Is.Not.EqualTo(before));
+            Assert.That(view.Gesture.ActivePointerId, Is.EqualTo(31));
+            Assert.That(view.Pager.Version, Is.EqualTo(version)); Assert.That(view.Pager.Position, Is.EqualTo(position));
+            Assert.That(view.Phase, Is.EqualTo(SegmentPhase.DraggingHorizontal));
+            scroll.OnEndDrag(p); view.CancelInteraction(SegmentCancelReason.PointerCancelled);
+            view.Select("activity", true); before = item.Label.text;
+            yield return new WaitForSecondsRealtime(.12f);
+            Assert.That(item.Label.text, Is.Not.EqualTo(before)); Assert.That(view.TargetPageId, Is.EqualTo("activity"));
+            yield return new WaitForSecondsRealtime(.3f);
+            Assert.That(view.CurrentPageId, Is.EqualTo("activity")); Assert.That(view.Bar.GetItem("activity"), Is.SameAs(item));
+            Assert.That(item.Icon.sprite, Is.SameAs(originalIcon));
+            button.onClick.Invoke(); Assert.That(label.text, Is.EqualTo("LIVE: OFF"));
+            before = item.Label.text; string badge = item.Badge.text;
+            yield return new WaitForSecondsRealtime(.2f);
+            Assert.That(item.Label.text, Is.EqualTo(before)); Assert.That(item.Badge.text, Is.EqualTo(badge));
+        }
         bool UpdateItem(string id, SegmentItemData data) => view.UpdateItem(id, data);
         [UnityTest] public IEnumerator UpdateItemDuringDragKeepsOwnerAndContinuesReceivingMovement()
         {

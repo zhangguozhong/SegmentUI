@@ -6,7 +6,7 @@ namespace SegmentUI.Samples
     /// <summary>示例入口：组织页面、按钮、方向与压力演示，不属于核心业务 API。</summary>
     public sealed class SegmentDemo : MonoBehaviour
     {
-        public const int CurrentSchema = 9;
+        public const int CurrentSchema = 10;
         public int Schema = CurrentSchema;
         public SegmentView View;
         public SegmentDemoPage PageA, PageB, PageNative;
@@ -15,9 +15,12 @@ namespace SegmentUI.Samples
         public Sprite ItemIcon;
         public SegmentIndicator Underline, Background, Outline;
         public Text Diagnostics;
-        public Button Stress, Cancel, Reset, Style, DirectionButton;
+        public Button Stress, Cancel, Reset, Style, DirectionButton, LiveUpdateButton;
         bool initialized, alternate;
-        float nextStress;
+        float nextStress, nextLiveUpdate;
+        /// <summary>持续更新开关，默认关闭；计时器不依赖分页是否处于拖拽或动画状态。</summary>
+        public bool LiveUpdatesEnabled { get; private set; }
+        public int LiveUpdateCount { get; private set; }
         int stressRemaining;
         /// <summary>通过固定 PageId 配置演示数据与操作入口；初始化失败后可补齐引用再调用。</summary>
         public void Initialize()
@@ -36,6 +39,7 @@ namespace SegmentUI.Samples
             Reset.onClick.AddListener(ResetLists);
             Style.onClick.AddListener(ToggleStyle);
             DirectionButton.onClick.AddListener(ToggleDirection);
+            LiveUpdateButton.onClick.AddListener(ToggleLiveUpdates);
             View.DirectionChanged += ApplyDemoDirection;
             ApplyDemoDirection(View.IsRightToLeft);
             UpdateDiagnostics();
@@ -60,9 +64,28 @@ namespace SegmentUI.Samples
         public void ToggleStyle()
         {
             alternate = !alternate;
+            // 示例 BadgeItem 的文字左右预留共 136；扣除图标与间距后仍需至少 100，避免动态标题换行。
+            View.Bar.ItemPadding = alternate ? 100 : 32;
             View.Bar.LayoutMode = alternate ? SegmentBarLayout.ContentWidth : SegmentBarLayout.Equal;
             View.SetIndicators(alternate ? new[] { Background, Outline } : new[] { Underline });
             Style.GetComponentInChildren<Text>().text = alternate ? "STYLE: PILL" : "STYLE: LINE";
+        }
+        /// <summary>开启后每 0.1 秒原地更新 Activity；关闭只停计时器，不恢复旧数据或取消交互。</summary>
+        public void ToggleLiveUpdates()
+        {
+            LiveUpdatesEnabled = !LiveUpdatesEnabled;
+            LiveUpdateButton.GetComponentInChildren<Text>().text = LiveUpdatesEnabled ? "LIVE: ON" : "LIVE: OFF";
+            if (LiveUpdatesEnabled) UpdateLiveItem();
+        }
+        /// <summary>演示调用 UpdateItem：保留图标，角标循环包含零以便检查隐藏；不提交 SetPages。</summary>
+        public void UpdateLiveItem()
+        {
+            if (!LiveUpdatesEnabled) return;
+            LiveUpdateCount++;
+            View.UpdateItem("activity", new SegmentItemData {
+                Title = "Activity " + (LiveUpdateCount % 100), Icon = ItemIcon, BadgeCount = LiveUpdateCount % 10
+            });
+            nextLiveUpdate = Time.unscaledTime + .1f;
         }
         void Update()
         {
@@ -72,13 +95,14 @@ namespace SegmentUI.Samples
                 View.Select(View.EnabledPageIds[stressRemaining % View.EnabledPageIds.Count]);
                 stressRemaining--; nextStress = Time.unscaledTime + .055f;
             }
+            if (LiveUpdatesEnabled && Time.unscaledTime >= nextLiveUpdate) UpdateLiveItem();
             UpdateDiagnostics();
         }
         public void UpdateDiagnostics()
         {
             int resets = 0;
             foreach (var page in View.GetComponentsInChildren<SegmentDemoPage>(true)) resets += page.ResetCount;
-            Diagnostics.text = "CURRENT " + (View.CurrentPageId ?? "--") + "   TARGET " + (View.TargetPageId ?? "--") + "\n" + View.Phase + "  /  LIST RESETS " + resets + "  /  STRESS LEFT " + stressRemaining;
+            Diagnostics.text = "CURRENT " + (View.CurrentPageId ?? "--") + "   TARGET " + (View.TargetPageId ?? "--") + "\n" + View.Phase + " / RESETS " + resets + " / STRESS " + stressRemaining + " / UPDATES " + LiveUpdateCount;
             if (View.CurrentPageId == "nested" && View.GetPage("nested") is SegmentNestedDemoPage nested)
                 Diagnostics.text += "\nCHILD " + nested.ChildView.CurrentPageId + "  /  " + nested.ChildView.Phase;
         }

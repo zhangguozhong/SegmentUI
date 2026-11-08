@@ -20,6 +20,14 @@
 - **DIR** 切换 LTR/RTL，**STYLE** 切换指示器，**STRESS** 连续切页，**CANCEL** 取消过渡，**RESET LIST** 重置列表位置。
 - 需要重新生成示例时，选择 **Tools → Segment UI → Generate Demo**。
 
+### 在拖拽和动画期间测试 UpdateItem
+
+1. 点击底部 **LIVE: OFF** 切换到 **LIVE: ON**。Activity 标题与角标每 0.1 秒更新一次，图标保持不变；诊断区 `UPDATES` 显示累计次数，角标每十次会隐藏一次。
+2. 按住页面横向拖动并停在两页之间：标题继续变化，页面应保持在手指所在的位置，不跳回已选页。
+3. 上下拖动页面列表，或横向拖动标题栏：持续更新不应抢走手势。
+4. 点击 Activity 切页，或点击 **STRESS** 连续请求切页，观察更新期间动画继续执行。使用 **STYLE** 的内容宽度模式可检查标题变长后的布局和指示器，使用 **DIR** 检查 RTL。
+5. 再次点击 **LIVE: ON** 停止更新，保留最后显示的数据。**CANCEL** 只取消切页和压力操作，持续更新需要通过 LIVE 单独关闭。
+
 ## 配置页面与标题
 
 把 `Prefabs/SegmentView.prefab` 放到宿主 Canvas 的可用区域内，对其 RectTransform 设置拉伸。页面根节点使用 `SegmentPage` 或其派生类。

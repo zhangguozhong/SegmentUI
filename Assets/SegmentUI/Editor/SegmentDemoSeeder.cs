@@ -61,15 +61,15 @@ namespace SegmentUI.Editor
             var header = Rect("Header",safe); Top(header,HeaderHeight); header.offsetMin = new Vector2(Inset,header.offsetMin.y); header.offsetMax = new Vector2(-Inset,0);
             var eyebrow = Text("Eyebrow",header,"SEGMENT UI   /   INTERACTION LAB",24); Top(eyebrow.rectTransform,48); eyebrow.color = Cyan;
             var title = Text("Title",header,"One gesture. One owner.",48); Top(title.rectTransform,72,48);
-            var help = Text("Help",header,"Swipe between pages. Each list keeps its scroll position.\nNative: test scroll + taps. Nested: test parent / child paging.",26); Top(help.rectTransform,80,120);
+            var help = Text("Help",header,"LIVE updates Activity while dragging. Try LIVE + STRESS.\nSTYLE tests title width; DIR switches layout direction.",26); Top(help.rectTransform,80,120);
             var middle = Rect("Middle",safe); Fill(middle); middle.offsetMin = new Vector2(Inset,Inset + FooterHeight + Gap); middle.offsetMax = new Vector2(-Inset,-HeaderHeight-Gap);
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(defaultPrefab); instance.transform.SetParent(middle,false); Fill((RectTransform)instance.transform);
             instance.AddComponent<RtlLayoutNode>().IgnoreSubtree = true;
             var footer = Rect("Footer",safe); footer.anchorMin = Vector2.zero; footer.anchorMax = new Vector2(1,0); footer.pivot = new Vector2(.5f,0); footer.sizeDelta = new Vector2(-Inset*2,FooterHeight); footer.anchoredPosition = new Vector2(0,Inset);
-            var diagnostics = Text("Diagnostics",footer,"CURRENT --   TARGET --\nIdle  /  LIST RESETS 0  /  STRESS LEFT 0",26); Top(diagnostics.rectTransform,96); diagnostics.color = Cyan;
+            var diagnostics = Text("Diagnostics",footer,"CURRENT --   TARGET --\nIdle / RESETS 0 / STRESS 0 / UPDATES 0",26); Top(diagnostics.rectTransform,96); diagnostics.color = Cyan;
             var row = Rect("Controls",footer); Top(row,112,112); var layout = row.gameObject.AddComponent<HorizontalLayoutGroup>(); layout.spacing = Gap; layout.childControlWidth = layout.childControlHeight = layout.childForceExpandWidth = layout.childForceExpandHeight = true;
             var demo = canvas.AddComponent<SegmentDemo>(); demo.View = instance.GetComponent<SegmentView>(); demo.PageA = pageA; demo.PageB = pageB; demo.PageNative = pageNative; demo.PageNested = pageNested; demo.BadgeItem = badge; demo.ItemIcon = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd"); demo.Underline = line; demo.Background = background; demo.Outline = outline; demo.Diagnostics = diagnostics;
-            demo.Stress = Button(row,"Stress","STRESS"); demo.Cancel = Button(row,"Cancel","CANCEL"); demo.Reset = Button(row,"Reset","RESET LIST"); demo.Style = Button(row,"Style","STYLE: LINE"); demo.DirectionButton = Button(row,"Direction","DIR: LTR");
+            demo.Stress = Button(row,"Stress","STRESS"); demo.Cancel = Button(row,"Cancel","CANCEL"); demo.Reset = Button(row,"Reset","RESET LIST"); demo.Style = Button(row,"Style","STYLE: LINE"); demo.DirectionButton = Button(row,"Direction","DIR: LTR"); demo.LiveUpdateButton = Button(row,"Live","LIVE: OFF");
             var events = new GameObject("EventSystem",typeof(EventSystem),typeof(StandaloneInputModule)); events.transform.SetParent(canvas.transform,false);
             AddRtlAdapter(canvas).SourceView = demo.View;
             var demoPrefab = Save(canvas,Folder + "/SegmentDemo.prefab");

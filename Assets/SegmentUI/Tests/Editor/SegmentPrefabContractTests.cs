@@ -108,6 +108,11 @@ namespace SegmentUI.Tests.Editor
             Assert.That(prefab.GetComponentsInChildren<Transform>(true).Count(t => t.name == "SafeAreaContent"), Is.EqualTo(1));
             var safe = prefab.transform.Find("SafeAreaContent");
             foreach (var zone in new[] { "Header", "Middle", "Footer" }) Assert.That(safe.Find(zone), Is.Not.Null);
+            var live = safe.Find("Footer/Controls/Live");
+            Assert.That(live, Is.Not.Null);
+            Assert.That(live.GetComponentInChildren<Text>().text, Is.EqualTo("LIVE: OFF"));
+            var demo = new SerializedObject(prefab.GetComponents<MonoBehaviour>().Single(component => component.GetType().Name == "SegmentDemo"));
+            Assert.That(demo.FindProperty("LiveUpdateButton").objectReferenceValue, Is.EqualTo(live.GetComponent<Button>()));
             foreach (var button in prefab.GetComponentsInChildren<Button>(true))
             {
                 var layout = button.GetComponent<LayoutElement>();
