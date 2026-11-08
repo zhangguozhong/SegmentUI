@@ -77,6 +77,23 @@ descriptor.PageRevision++;
 
 页面默认懒创建，已创建实例缓存到宿主释放，保留纵向位置；适合少量分类页，不提供自动 LRU 淘汰。
 
+## 运行时更新标题、图标和角标
+
+```csharp
+bool accepted = segments.UpdateItem("activity", new SegmentItemData
+{
+    Title = "最新动态",
+    Icon = activityIcon, // Sprite；传 null 清除图标
+    BadgeCount = 5      // 小于等于 0 时隐藏角标
+});
+```
+
+`UpdateItem` 替换该项的 Title、Icon、BadgeCount，并保留原来的 IsEnabled。调用后无需再调用 SetPages；它不会重建标题项或 Page，也不会重新绑定业务页面、打断当前拖拽或切页动画。标题宽度和指示器会按新内容刷新，标题栏不会因此自动居中或停止惯性。
+
+传入数据会被复制，之后修改该对象不会自动刷新。Id 不存在时返回 false；itemData 为 null 时抛出 ArgumentNullException。回调内调用会排队，返回 true 表示已接受；如果前面的排队操作已删除该页，更新会跳过。
+
+新增、删除、排序、启用/禁用页面、替换模板或页面来源仍使用 SetPages。如果业务还保留页面描述列表，请同步修改列表中的 Item，避免后续 SetPages 用旧数据覆盖显示。
+
 ## 选择页面与切换方向
 
 ```csharp

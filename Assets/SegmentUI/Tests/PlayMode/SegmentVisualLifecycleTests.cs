@@ -37,6 +37,72 @@ namespace SegmentUI.Tests
             if (events != null && !events.transform.IsChildOf(demo.transform)) Object.Destroy(events);
             Object.Destroy(demo); yield return null;
         }
+        bool UpdateItem(string id, SegmentItemData data) => view.UpdateItem(id, data);
+        [UnityTest] public IEnumerator UpdateItemDuringDragKeepsOwnerAndContinuesReceivingMovement()
+        {
+            foreach (bool rtl in new[] { false, true })
+            foreach (bool vertical in new[] { false, true })
+            {
+                view.SetDirection(rtl ? SegmentLayoutDirection.RightToLeft : SegmentLayoutDirection.LeftToRight);
+                view.Select("dispatch", false);
+                var page = view.GetPage("dispatch");
+                var scroll = page.GetComponentInChildren<SegmentScrollRect>();
+                var p = new PointerEventData(EventSystem.current) { pointerId = 11, button = PointerEventData.InputButton.Left,
+                    position = new Vector2(200, 200), pressPosition = new Vector2(200, 200) };
+                scroll.OnInitializePotentialDrag(p);
+                p.delta = vertical ? new Vector2(0, 100) : new Vector2(rtl ? 100 : -100, 0);
+                p.position += p.delta; scroll.OnBeginDrag(p); scroll.OnDrag(p);
+                var phase = view.Phase; var owner = view.Gesture.ActivePointerId;
+                Assert.That(phase, Is.EqualTo(vertical ? SegmentPhase.DraggingVertical : SegmentPhase.DraggingHorizontal));
+                float position = view.Pager.Position; var scrollPosition = scroll.content.anchoredPosition;
+                int version = view.Pager.Version; var item = view.Bar.GetItem("dispatch");
+                Assert.That(UpdateItem("dispatch", new SegmentItemData { Title = "live title", BadgeCount = 8 }), Is.True);
+                Assert.That(view.Phase, Is.EqualTo(phase)); Assert.That(view.Gesture.ActivePointerId, Is.EqualTo(owner));
+                Assert.That(view.Pager.Version, Is.EqualTo(version)); Assert.That(view.Pager.Position, Is.EqualTo(position));
+                Assert.That(scroll.content.anchoredPosition, Is.EqualTo(scrollPosition));
+                Assert.That(view.GetPage("dispatch"), Is.SameAs(page)); Assert.That(view.Bar.GetItem("dispatch"), Is.SameAs(item));
+                Assert.That(item.Label.text, Is.EqualTo("live title")); Assert.That(item.RightToLeft, Is.EqualTo(rtl));
+                p.position += p.delta; scroll.OnDrag(p);
+                if (vertical) Assert.That(scroll.content.anchoredPosition, Is.Not.EqualTo(scrollPosition));
+                else Assert.That(view.Pager.Position, Is.GreaterThan(position));
+                scroll.OnEndDrag(p); view.CancelInteraction(SegmentCancelReason.PointerCancelled);
+            }
+            yield return null;
+        }
+        [UnityTest] public IEnumerator UpdateItemDuringSettlingPreservesTargetAndCompletesNormally()
+        {
+            view.SetDirection(SegmentLayoutDirection.RightToLeft);
+            view.Select("activity", true); view.Pager.Tick(.05f);
+            var source = view.GetPage("dispatch"); var target = view.GetPage("activity");
+            var item = view.Bar.GetItem("activity"); float weight = item.SelectedWeight;
+            int version = view.Pager.Version; float position = view.Pager.Position;
+            int changes = 0; view.SelectionChanged += _ => changes++;
+            for (int i = 0; i < 10; i++) Assert.That(UpdateItem("activity", new SegmentItemData { Title = "updated " + i, BadgeCount = i }), Is.True);
+            Assert.That(view.IsTransitioning, Is.True); Assert.That(view.TargetPageId, Is.EqualTo("activity"));
+            Assert.That(view.CurrentPageId, Is.EqualTo("dispatch")); Assert.That(view.Pager.Position, Is.EqualTo(position));
+            Assert.That(view.Pager.Version, Is.EqualTo(version)); Assert.That(item.SelectedWeight, Is.EqualTo(weight));
+            Assert.That(view.GetPage("dispatch"), Is.SameAs(source)); Assert.That(view.GetPage("activity"), Is.SameAs(target));
+            yield return new WaitForSecondsRealtime(.4f);
+            Assert.That(view.CurrentPageId, Is.EqualTo("activity")); Assert.That(changes, Is.EqualTo(1));
+            Assert.That(item.IsCommitted, Is.True); Assert.That(item.Badge.text, Is.EqualTo("9"));
+        }
+        [UnityTest] public IEnumerator UpdateItemDoesNotEndTitleBarDragOrStopItsVelocity()
+        {
+            var bar = view.Bar; bar.LayoutMode = SegmentBarLayout.ContentWidth;
+            Assert.That(UpdateItem("dispatch", new SegmentItemData { Title = new string('W', 100) }), Is.True);
+            var scroll = (SegmentScrollRect)bar.TitleScroll;
+            var p = new PointerEventData(EventSystem.current) { pointerId = 15, button = PointerEventData.InputButton.Left,
+                position = new Vector2(200, 200), pressPosition = new Vector2(200, 200) };
+            scroll.OnInitializePotentialDrag(p); p.delta = new Vector2(-80, 0); p.position += p.delta;
+            scroll.OnBeginDrag(p); scroll.OnDrag(p); var phase = view.Phase;
+            var before = bar.ItemsRoot.anchoredPosition; scroll.velocity = new Vector2(75, 0);
+            Assert.That(view.Gesture.ActivePointerId, Is.EqualTo(15));
+            Assert.That(UpdateItem("activity", new SegmentItemData { Title = new string('M', 120), BadgeCount = 2 }), Is.True);
+            Assert.That(view.Gesture.ActivePointerId, Is.EqualTo(15)); Assert.That(view.Phase, Is.EqualTo(phase));
+            Assert.That(bar.ItemsRoot.anchoredPosition, Is.EqualTo(before)); Assert.That(scroll.velocity.x, Is.EqualTo(75));
+            p.position += p.delta; scroll.OnDrag(p); Assert.That(bar.ItemsRoot.anchoredPosition.x, Is.LessThan(before.x));
+            scroll.OnEndDrag(p); yield return null;
+        }
         sealed class UnbakedPageFactory : ISegmentPageFactory
         {
             public SegmentPage Create(Transform parent)

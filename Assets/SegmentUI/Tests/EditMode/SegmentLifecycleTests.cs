@@ -55,6 +55,127 @@ namespace SegmentUI.Tests
         protected SegmentPageDescriptor Page(string id) => new SegmentPageDescriptor { Id = id, Item = new SegmentItemData { Title = id }, Source = PageSource.FromFactory(factory) };
         [TearDown] public void Cleanup() { ProbePage.ExitHook = null; ProbePage.EnterHook = null; UnityEngine.Object.DestroyImmediate(root); }
 
+        bool UpdateItem(string id, SegmentItemData data) => view.UpdateItem(id, data);
+        SegmentBar ConfigureItemBar()
+        {
+            var node = new GameObject("Bar", typeof(RectTransform), typeof(SegmentBar));
+            node.transform.SetParent(root.transform, false);
+            ((RectTransform)node.transform).sizeDelta = new Vector2(400, 100);
+            var bar = node.GetComponent<SegmentBar>();
+            var items = new GameObject("Items", typeof(RectTransform)).GetComponent<RectTransform>();
+            items.SetParent(node.transform, false);
+            var template = new GameObject("Template", typeof(RectTransform), typeof(Button), typeof(SegmentItemView)).GetComponent<SegmentItemView>();
+            template.transform.SetParent(node.transform, false); template.Button = template.GetComponent<Button>();
+            template.Label = new GameObject("Label", typeof(RectTransform), typeof(Text)).GetComponent<Text>();
+            template.Label.transform.SetParent(template.transform, false);
+            template.Label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            template.Badge = new GameObject("Badge", typeof(RectTransform), typeof(Text)).GetComponent<Text>();
+            template.Badge.transform.SetParent(template.transform, false); template.Badge.font = template.Label.font;
+            template.gameObject.SetActive(false);
+            bar.Configure(items, template, null, null); bar.LayoutMode = SegmentBarLayout.ContentWidth;
+            typeof(SegmentView).GetField("bar", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(view, bar);
+            return bar;
+        }
+        [Test] public void UpdateItemKeepsPagesLazyAndPreservesInstancesAndEnabledState()
+        {
+            var bar = ConfigureItemBar(); pages[2].Item.IsEnabled = false;
+            view.SetPages(pages); var page = view.GetPage("a"); var item = bar.GetItem("a"); var other = bar.GetItem("b");
+            int version = view.DataVersion; ProbePage.Events.Clear();
+            var data = new SegmentItemData { Title = "updated", BadgeCount = 7, IsEnabled = false };
+            Assert.That(UpdateItem("a", data), Is.True); data.Title = "external mutation";
+            Assert.That(UpdateItem("c", new SegmentItemData { Title = "disabled", BadgeCount = 2 }), Is.True);
+            Assert.That(UpdateItem("b", new SegmentItemData { Title = "still lazy" }), Is.True);
+            Assert.That(bar.GetItem("a"), Is.SameAs(item)); Assert.That(bar.GetItem("b"), Is.SameAs(other));
+            Assert.That(item.Label.text, Is.EqualTo("updated")); Assert.That(item.Badge.text, Is.EqualTo("7"));
+            Assert.That(item.IsEnabled, Is.True); Assert.That(bar.GetItem("c").IsEnabled, Is.False);
+            Assert.That(item.IsCommitted, Is.True); Assert.That(item.SelectedWeight, Is.EqualTo(1));
+            Assert.That(view.GetPage("a"), Is.SameAs(page)); Assert.That(view.GetPage("b"), Is.Null);
+            Assert.That(factory.Created, Is.EqualTo(1)); Assert.That(factory.Released, Is.Zero);
+            Assert.That(view.DataVersion, Is.EqualTo(version)); Assert.That(ProbePage.Events, Is.Empty);
+            Assert.That(UpdateItem("missing", data), Is.False);
+            Assert.That(UpdateItem(null, data), Is.False);
+            Assert.Throws<ArgumentNullException>(() => view.UpdateItem("a", null));
+            Assert.That(UpdateItem("a", new SegmentItemData { Title = "clear", BadgeCount = 0 }), Is.True);
+            Assert.That(item.Badge.gameObject.activeSelf, Is.False);
+        }
+        [Test] public void UpdateItemPreservesTransitionAndTitleScrollVelocityWhileRelayouting()
+        {
+            var bar = ConfigureItemBar(); view.SetPages(pages);
+            var layer = new GameObject("IndicatorLayer", typeof(RectTransform)).GetComponent<RectTransform>();
+            layer.SetParent(bar.transform, false); bar.ForegroundLayer = layer;
+            var indicator = new GameObject("Recording", typeof(RectTransform), typeof(RecordingSegmentIndicator)).GetComponent<RecordingSegmentIndicator>();
+            indicator.transform.SetParent(root.transform, false); indicator.gameObject.SetActive(false);
+            view.SetIndicator(indicator);
+            view.Select("b", true); pager.Tick(.05f);
+            var recorder = layer.GetComponentInChildren<RecordingSegmentIndicator>(true);
+            float progress = recorder.Frame.Progress;
+            float indicatorWidth = recorder.Frame.RightItem.width;
+            var item = bar.GetItem("b"); float width = ((RectTransform)item.transform).rect.width;
+            float position = pager.Position, weight = item.SelectedWeight; int version = pager.Version;
+            bar.TitleScroll.velocity = new Vector2(91, 0);
+            Assert.That(UpdateItem("b", new SegmentItemData { Title = new string('W', 80), BadgeCount = 99 }), Is.True);
+            Assert.That(((RectTransform)item.transform).rect.width, Is.GreaterThan(width));
+            Assert.That(bar.TitleScroll.velocity.x, Is.EqualTo(91));
+            Assert.That(recorder.Frame.Progress, Is.EqualTo(progress));
+            Assert.That(recorder.Frame.RightItem.width, Is.GreaterThan(indicatorWidth));
+            Assert.That(recorder.Frame.TransitionVersion, Is.EqualTo(version));
+            Assert.That(item.SelectedWeight, Is.EqualTo(weight)); Assert.That(item.IsCommitted, Is.False);
+            Assert.That(pager.Position, Is.EqualTo(position)); Assert.That(pager.Version, Is.EqualTo(version));
+            Assert.That(view.TargetPageId, Is.EqualTo("b")); Assert.That(view.IsTransitioning, Is.True);
+            pager.Tick(1); Assert.That(view.CurrentPageId, Is.EqualTo("b"));
+        }
+        [Test] public void UpdateItemFromSelectionCallbackCopiesQueuedDataAndDoesNotRebindPages()
+        {
+            var bar = ConfigureItemBar(); view.SetPages(pages);
+            view.SelectionChanged += _ => {
+                var data = new SegmentItemData { Title = "queued", BadgeCount = 4 };
+                Assert.That(UpdateItem("b", data), Is.True); data.Title = "changed after request";
+            };
+            view.Select("b", false);
+            Assert.That(bar.GetItem("b").Label.text, Is.EqualTo("queued"));
+            Assert.That(view.GetPage("b").BindingVersion, Is.EqualTo(1));
+            Assert.That(bar.GetItem("b").IsCommitted, Is.True);
+        }
+        [Test] public void UpdateItemQueuedAfterRemovalDoesNotResurrectPage()
+        {
+            var bar = ConfigureItemBar(); view.SetPages(pages); bool accepted = false;
+            // A selection notification runs inside the mutation guard.
+            view.SelectionChanged += change => {
+                if (change.CurrentId != "b") return;
+                view.SetPages(new[] { pages[0] });
+                accepted = view.UpdateItem("b", new SegmentItemData { Title = "removed" });
+            };
+            view.Select("b", false);
+            Assert.That(accepted, Is.True); Assert.That(view.CurrentPageId, Is.EqualTo("a"));
+            Assert.That(view.GetPage("b"), Is.Null); Assert.That(bar.GetItem("b"), Is.Null);
+        }
+        [Test] public void UpdateItemRefreshesIconAndClampsShrinkingTitleRangeWithoutStoppingVelocity()
+        {
+            var bar = ConfigureItemBar();
+            var icon = new GameObject("Icon", typeof(RectTransform), typeof(Image)).GetComponent<Image>();
+            icon.transform.SetParent(bar.DefaultTemplate.transform, false); bar.DefaultTemplate.Icon = icon;
+            var sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 1, 1), Vector2.zero);
+            try
+            {
+                view.SetPages(pages);
+                view.UpdateItem("a", new SegmentItemData { Title = new string('W', 200), Icon = sprite });
+                var item = bar.GetItem("a"); Assert.That(item.Icon.sprite, Is.SameAs(sprite));
+                Assert.That(item.Icon.gameObject.activeSelf, Is.True);
+                bar.ItemsRoot.anchoredPosition = new Vector2(-500, 0); bar.TitleScroll.velocity = new Vector2(55, 0);
+                view.UpdateItem("a", new SegmentItemData { Title = "short" });
+                Assert.That(item.Icon.sprite, Is.Null); Assert.That(item.Icon.gameObject.activeSelf, Is.False);
+                Assert.That(bar.ItemsRoot.anchoredPosition.x, Is.Zero.Within(.01f));
+                Assert.That(bar.TitleScroll.velocity.x, Is.EqualTo(55));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(sprite); }
+        }
+        [Test] public void UpdateItemWorksWithoutTitleBarAndDoesNotInstantiatePage()
+        {
+            view.SetPages(pages); int version = pager.Version;
+            Assert.That(UpdateItem("b", new SegmentItemData { Title = "headless" }), Is.True);
+            Assert.That(view.GetPage("b"), Is.Null); Assert.That(pager.Version, Is.EqualTo(version));
+        }
+
         [Test] public void EmptySlotsExistBeforeLazyPagesAndLayoutOwnsContentWidth()
         {
             view.SetPages(pages,"a");

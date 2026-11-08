@@ -45,7 +45,7 @@ namespace SegmentUI
         readonly HashSet<SegmentItemView> owned = new HashSet<SegmentItemView>();
         readonly List<SegmentItemView> ordered = new List<SegmentItemView>();
         readonly List<SegmentIndicator> indicators = new List<SegmentIndicator>();
-        bool interactable = true, rendering, indicatorsInitialized;
+        bool interactable = true, rendering, indicatorsInitialized, updatingItem;
         int layoutVersion, layoutSignature;
         bool hasLayout;
         string lastCentered;
@@ -136,6 +136,24 @@ namespace SegmentUI
             }
             lastCentered = null; hasLayout = false; LayoutItems(); Interactable = interactable;
             if (!indicatorsInitialized) SetIndicators(DefaultIndicators);
+        }
+        internal void UpdateItem(string id, SegmentItemData data)
+        {
+            var item = GetItem(id);
+            if (item == null) return;
+            updatingItem = true;
+            try
+            {
+                float weight = item.SelectedWeight; bool committed = item.IsCommitted;
+                item.Bind(data.Copy());
+                item.ApplyDirection(RightToLeft);
+                item.ApplyVisualState(weight, committed);
+                LayoutItems();
+                // Relayout may invalidate centering, but a data refresh must not stop title scrolling.
+                lastCentered = TargetPageId ?? lastCurrent;
+                RefreshVisuals();
+            }
+            finally { updatingItem = false; }
         }
         public SegmentItemView GetItem(string id) => id != null && items.TryGetValue(id, out var item) ? item : null;
         void ClearItems()
@@ -260,7 +278,8 @@ namespace SegmentUI
                 string centerId = TargetPageId ?? currentId;
                 if (centerId != null && lastCentered != centerId)
                 {
-                    if (AutoCenter) CenterItem(centerId); else RevealItem(centerId);
+                    if (!updatingItem)
+                    { if (AutoCenter) CenterItem(centerId); else RevealItem(centerId); }
                     lastCentered = centerId;
                 }
                 var a = GetItem(enabledIds[left]); var b = GetItem(enabledIds[right]); var committed = GetItem(currentId);

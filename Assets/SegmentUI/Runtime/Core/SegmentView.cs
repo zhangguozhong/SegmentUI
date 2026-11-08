@@ -120,6 +120,28 @@ namespace SegmentUI
             if (previous != CurrentPageId) PublishSelection(previous, CurrentPageId, SegmentSelectionSource.Data);
             if (LastError != null) Notify(() => SelectionFailed?.Invoke(initial ?? candidate, LastError));
         }
+        /// <summary>
+        /// Updates Title/Icon/BadgeCount in place without interrupting interaction or rebinding pages.
+        /// IsEnabled is preserved; use SetPages for changes to the selectable page sequence.
+        /// Returns false for an unknown ID or a disposing view. Reentrant updates are queued.
+        /// </summary>
+        public bool UpdateItem(string pageId, SegmentItemData itemData)
+        {
+            if (itemData == null) throw new ArgumentNullException(nameof(itemData));
+            if (disposing || pageId == null || !pages.Exists(page => page.Id == pageId)) return false;
+            var snapshot = itemData.Copy();
+            Schedule(() =>
+            {
+                // A preceding queued SetPages may have removed this ID.
+                var page = pages.Find(candidate => candidate.Id == pageId);
+                if (disposing || page == null) return;
+                snapshot.IsEnabled = page.Item.IsEnabled;
+                page.Item = snapshot;
+                if (bar != null) bar.UpdateItem(pageId, snapshot);
+            });
+            return true;
+        }
+
         public SegmentSelectionResult Select(string pageId, bool animated = true) => RequestSelect(pageId, animated, SegmentSelectionSource.Code);
         SegmentSelectionResult RequestSelect(string id, bool animated, SegmentSelectionSource source)
         {
